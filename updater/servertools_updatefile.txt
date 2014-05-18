@@ -1,0 +1,19 @@
+"Updater"
+{
+	"Information"
+	{
+		"Version"
+		{
+			"Latest"	"1.3.3"
+		}
+		
+		"Notes"	"BETA!!"
+	}
+	
+	"Files"
+	{
+		"Plugin"	"Path_SM/plugins/servertools.smx"
+		"Plugin"	"Path_SM/docs/servertools.txt"
+		"Source"	"Path_SM/scripting/servertools.sp"
+	}
+}
