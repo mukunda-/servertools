@@ -3,7 +3,7 @@
 
 #include "stdafx.h"
 
-#define VERSION "2.0.1 ALPHA"
+#define VERSION "3.0.0"
 
 const char *startup_message = 
 	"\n"
@@ -287,6 +287,8 @@ private:
 	  
 	std::string rcon_command;
 	std::string rcon_result;
+	bool rcon_has_operation;
+	int last_operation_id;
 
 	tcp::socket socket;
 
@@ -340,8 +342,35 @@ private:
 			return err;
 		}
 		
+		int operation_id = 0;
+		if( rcon_has_operation ) {
+			// scan for operation ID
+			
+			// get input ...
+			std::istringstream stream( rcon_result );
+			std::string line;
+			while( std::getline(stream, line) ) {
+				if( strncmp( line.c_str(), "[ST] OPCREATE:", 14 ) == 0 ) {
+					// found operation ID
+					line = line.substr( 14 );
+					operation_id = std::stoi( line );
+					break;	
+				}
+			}
+			if( operation_id != 0 ) {
+
+				// poll operation status.
+				last_operation_id = operation_id;
+			}
+
+		}
+		
 		// print to client
 		Echo( "[%s] %s", id.c_str(), rcon_result.c_str() );
+
+		if(operation_id) {
+			
+		}
 		return boost::system::error_code();
 	}
 	
@@ -524,6 +553,13 @@ public:
 		if( connected ) {
 			boost::system::error_code err = ExecCommand();
 			if( err ) {
+				Connect();
+				if( connected ) {
+					boost::system::error_code err = ExecCommand();
+				} else {
+					EchoError( "ERROR@%s: %d/%s", id.c_str(), err.value(), err.message().c_str() );
+				}
+				/*
 				if( err == boost::asio::error::eof ) {
 					Connect();
 					if( connected ) {
@@ -531,7 +567,7 @@ public:
 					}
 				} else {
 					EchoError( "ERROR@%s: %d/%s", id.c_str(), err.value(), err.message().c_str() );
-				}
+				}*/
 			}
 		}
 
@@ -540,32 +576,33 @@ public:
 
 	}
 	//-----------------------------------------------------------------------------------------------
-	void WaitOpThread() {
-		boost::lock_guard<boost::mutex> lock(busy);
-		is_busy = true;
+	void WaitForOp( int operation_id ) {
+		//boost::lock_guard<boost::mutex> lock(busy);
+		//is_busy = true;
 
 		int retries=30;
+		std::string poll_packet = "st_status " + operation_id;
 
 		for( ;; ) {
-		 
-			if( !SendPacket( Packet( Packet::SERVERDATA_EXECCOMMAND, "st_status RESET" ) ) ) break;
+			
+			if( !SendPacket( Packet( Packet::SERVERDATA_EXECCOMMAND, poll_packet.c_str() ) ) ) break;
 			Packet p;
 			if( !GetPacket(p) ) break;
 			
-			std::string response_code = p.GetData().substr(0,4);
-			if( response_code == "#000" ) {
-				// READY status, server is not busy
+			std::string response_code = p.GetData().substr(0,14);
+			if( response_code == "[ST] STATUS: N" ) {
+				// NOTFOUND status, server is not busy.
 				break;
-			} else if( response_code == "#001" ) {
+			} else if( response_code == "[ST] STATUS: B" ) {
 				// BUSY status, sleep and retry
 				retries--;
 				if( !retries ) {
-					EchoError( "ERROR@%s: %s", id.c_str(), "Server is stuck in BUSY state for more than 30 seconds." );
+					EchoError( "ERROR@%s: %s", id.c_str(), "Server is stuck in operation for more than 30 seconds!" );
 					break;
 				}
 				boost::this_thread::sleep_for( boost::chrono::seconds(1) );
 				continue;
-			} else if( response_code == "#002" ) {
+			} else if( response_code == "[ST] STATUS: C" ) {
 				// COMPLETE status, print server response
 
 				// skip first line
@@ -580,10 +617,10 @@ public:
 				EchoError( "ERROR@%s: %s", id.c_str(), "Server responded with unknown or empty status" );
 				break;
 			}
-				
+			
 		}
-		is_busy = false;
-		waiter.notify_all();
+		//is_busy = false;
+		//waiter.notify_all();
 		  
 	}
 
@@ -612,7 +649,7 @@ public:
 	}*/
 	
 	//-----------------------------------------------------------------------------------------------
-	void RunCommand( const char *command ) {
+	void RunCommand( const char *command, bool has_operation ) {
 		boost::lock_guard<boost::mutex> lock(busy);
 		if( refresh_info ) {
 			EchoError( "ERROR@%s: %s", address, "NETWORK FAILURE" );
@@ -624,12 +661,15 @@ public:
 		}
 		is_busy = true;
 		rcon_command = command;
+		rcon_has_operation = has_operation;
 		
 		boost::thread t( boost::bind( &Server::CommandThread, this ) );
 	}
-
+	/*
 	//-----------------------------------------------------------------------------------------------
 	void WaitOperationComplete() {
+		if( last_operation_id == 0 ) return;
+
 		boost::lock_guard<boost::mutex> lock(busy);
 		if( refresh_info ) {
 			EchoError( "ERROR@%s: %s", address, "NETWORK FAILURE" );
@@ -641,7 +681,7 @@ public:
 		}
 		is_busy = true;
 		boost::thread t( boost::bind( &Server::WaitOpThread, this ) );
-	}
+	}*/
 	
 	//-----------------------------------------------------------------------------------------------
 	void WaitComplete() {
@@ -763,19 +803,19 @@ void WaitCompleteAll() {
 
 
 //-------------------------------------------------------------------------------------------------
-int RunCommandOnServers( std::string command ) {
+int RunCommandOnServers( std::string command, bool has_operation ) {
 	int count = 0;
 	for( size_t i = 0; i < servers.size(); i++ ) {
 		if( servers[i]->selected ) {
 			count++;
-			servers[i]->RunCommand( command.c_str() ); 
+			servers[i]->RunCommand( command.c_str(), has_operation ); 
 		}
 	}
 	
 	if( count == 0 ) { Echo( "No servers selected!" ); }
 	return count;
 }
-
+/*
 int WaitForOperation() {
 	int count = 0;
 	for( size_t i = 0; i < servers.size(); i++ ) {
@@ -785,7 +825,7 @@ int WaitForOperation() {
 		}
 	}
 	return count;
-}
+}*/
 
 //-------------------------------------------------------------------------------------------------
 void ExecuteCommand( const char *command ) {
@@ -884,7 +924,7 @@ void PrintSelection() {
 
 //-------------------------------------------------------------------------------------------------
 void Command_Select( CommandParams &params ) {
-	 
+	// todo; copy istarget from plugin.
 	if( params.Count() >= 2 ) {
 		std::string target;
 		target = params.GetAllArgs();
@@ -951,7 +991,7 @@ void Command_Run( CommandParams &params ) {
 		return;
 	}
 	
-	RunCommandOnServers(  params.GetArgString() );
+	RunCommandOnServers(  params.GetArgString(), false );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -979,7 +1019,7 @@ void Command_Help( CommandParams &params ) {
 		}
 	}
 }
-
+/*
 //-------------------------------------------------------------------------------------------------
 void Command_New( CommandParams &params ) {
 	if( params.Count() < 2 ) {
@@ -1074,8 +1114,23 @@ void Command_Sync( CommandParams &params ) {
 	RunCommandOnServers( "st_sync" );
 	WaitCompleteAll();
 	WaitForOperation();
-
+	
+}*/
+void Command_Get( CommandParams &params ) {
+	RunCommandOnServers( "st_get " + params.GetArgString(), true );
 }
+
+void Command_Remove( CommandParams &params ) {
+	RunCommandOnServers( "st_remove " + params.GetArgString(), true );
+	
+}
+
+void Command_Sync( CommandParams &params ) {
+	RunCommandOnServers( "st_sync " + params.GetArgString(), true );
+		
+}
+
+
 
 //-------------------------------------------------------------------------------------------------
 template <size_t maxlen> void GetInputEx( char (&dest)[maxlen], const char *prompt ) {
@@ -1134,23 +1189,26 @@ int _tmain( int argc, _TCHAR* argv[] ) {
 	new ConsoleCommand( "dsel", Command_Deselect, "Removes target from selection" );
 	new ConsoleCommand( "list", Command_List, "Lists servers" );
 	new ConsoleCommand( "r", Command_Run, "Run command on selected servers" );
-	new ConsoleCommand( "rcon", Command_Run, "" );
+	new ConsoleCommand( "rcon", Command_Run, "Run command on selected servers" );
 
-	new ConsoleCommand( "new", Command_New, "Create new file" );
-	new ConsoleCommand( "delete", Command_Delete, "Delete a file" );
+	//new ConsoleCommand( "new", Command_New, "Create new file" );
+	//new ConsoleCommand( "delete", Command_Delete, "Delete a file" );
 	
-	new ConsoleCommand( "dir", Command_Dir, "View directory contents" );
-	new ConsoleCommand( "copy", Command_Copy, "Copy file(s)" );
-	new ConsoleCommand( "rename", Command_Rename, "Rename file" );
-	new ConsoleCommand( "mkdir", Command_MakeDirectory, "Create directory" );
-	new ConsoleCommand( "edit", Command_Edit, "Edit file" );
-	new ConsoleCommand( "cfgfind", Command_CfgFind, "Search config files" );
-	new ConsoleCommand( "cfgedit", Command_CfgEdit, "Edit configuration file" );
-	new ConsoleCommand( "view", Command_View, "View file contents" );
-	new ConsoleCommand( "sync", Command_Sync, "Force sync" );
+	//new ConsoleCommand( "dir", Command_Dir, "View directory contents" );
+	//new ConsoleCommand( "copy", Command_Copy, "Copy file(s)" );
+	//new ConsoleCommand( "rename", Command_Rename, "Rename file" );
+	//new ConsoleCommand( "mkdir", Command_MakeDirectory, "Create directory" );
+	//new ConsoleCommand( "edit", Command_Edit, "Edit file" );
+	//new ConsoleCommand( "cfgfind", Command_CfgFind, "Search config files" );
+	//new ConsoleCommand( "cfgedit", Command_CfgEdit, "Edit configuration file" );
+	//new ConsoleCommand( "view", Command_View, "View file contents" );
+	//new ConsoleCommand( "sync", Command_Sync, "Force sync" );
 
+	new ConsoleCommand( "sync", Command_Sync, "Perform ServerTools Sync" );
+	new ConsoleCommand( "get", Command_Get, "Perform ServerTools Get" );
+	new ConsoleCommand( "remove", Command_Remove, "Perform ServerTools Remove" );
 
-	new ConsoleCommand( "exec", Command_ExecuteScript, "Executes a script" );
+	new ConsoleCommand( "exec", Command_ExecuteScript, "Executes a script (for this console, not remotely)" );
 	new ConsoleCommand( "quit", Command_Quit, "" );
 	new ConsoleCommand( "exit", Command_Quit, "Ends session" );
 	
