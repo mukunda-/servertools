@@ -1,0 +1,14 @@
+"ServerToolsPackage"
+{
+	// a package contains one or more sub-packages
+	// sub-packages
+	"pkg1"
+	{
+		"target"	"all"
+		"files"
+		{
+			"game/motd.txt" ""
+		}
+	}
+	
+}

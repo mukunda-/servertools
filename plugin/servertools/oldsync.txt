@@ -1,0 +1,610 @@
+
+//-------------------------------------------------------------------------------------------------
+// sync operation
+/*
+new Handle:sync_list = INVALID_HANDLE;
+new sync_list_next = 0;
+new Handle:sync_updates = INVALID_HANDLE;
+new Handle:sync_hashes = INVALID_HANDLE;
+new Handle:sync_plugins = INVALID_HANDLE;
+new bool:sync_reinstall;
+*/
+/*
+//-------------------------------------------------------------------------------------------------
+public Action:Command_sync( args ) {
+	if( !ReadyForNewOperation() ) return Plugin_Handled;	
+	initial_sync = false;
+	PerformSync();
+	return Plugin_Handled;
+}*/
+//-------------------------------------------------------------------------------------------------
+
+// SYNC OPERATION:
+//
+//  request manifest from remote server (RS)
+//  parse manifest and create listing of synchronized files, 
+//  ask RS for hashes of each file that is targetted, and create a list of out-of-date files
+//  get updated files from RS and overwrite old files
+//  move any plugins that were not on the manifest to /disabled/
+//
+
+
+//-------------------------------------------------------------------------------------------------
+PerformSync() {
+	if( op_state != STATE_READY ) return; // ???
+	StartOperation( "Server Sync" );
+	
+	// retrieve manifest
+	decl String:manifest_url[512];
+	FormatEx( manifest_url, sizeof manifest_url, "%s%s?%s", sync_url, sync_manifest, url_request_params );
+	new Handle:curl = curl_easy_init();
+	curl_easy_setopt_int_array( curl, CURLDefaultOpt, sizeof( CURLDefaultOpt ) );
+	 
+	// request manifest
+	decl String:tempfile[256];
+	GetTempFile( tempfile, sizeof(tempfile) );
+	new Handle:outfile = curl_OpenFile( tempfile, "wb" );
+	curl_easy_setopt_string( curl, CURLOPT_URL, manifest_url );
+	curl_easy_setopt_handle( curl, CURLOPT_WRITEDATA, outfile );
+	new Handle:pack = CreateDataPack();
+	WritePackCell( pack, _:outfile );
+	WritePackString( pack, tempfile );
+	curl_easy_perform_thread( curl, OnGetSyncManifest, pack );
+}
+
+//-------------------------------------------------------------------------------------------------
+Handle:LoadFileHashes() {
+	decl String:path[128];
+	BuildPath( Path_SM, path, sizeof path, "data/servertools-hashes.txt" );
+	new Handle:kv = CreateKeyValues( "servertools-filehashes" );
+	if( FileExists( path ) ) {
+		if( !FileToKeyValues( kv, path ) ) {
+			// corrupted?
+			CloseHandle(kv);
+			DeleteFile( path );
+			kv = CreateKeyValues( "servertools-filehashes" );
+		}
+	}
+	return kv;
+}
+
+//-------------------------------------------------------------------------------------------------
+SaveFileHashes( Handle:kv ) {
+	KvRewind( kv );
+	decl String:path[128];
+	BuildPath( Path_SM, path, sizeof path, "data/servertools-hashes.txt" );
+	KeyValuesToFile( kv, path );
+}
+
+//-------------------------------------------------------------------------------------------------
+Sync_WhitelistPlugins() {
+
+	// servertools
+	decl String:filename[128];
+	GetPluginFilename( INVALID_HANDLE, filename, sizeof filename );
+	BuildPath( Path_SM, filename, sizeof filename, "plugins/%s", filename );
+	ReplaceString( filename, sizeof(filename), "\\", "/" );
+	SetTrieValue( sync_plugins, filename, 1 );
+}
+
+//-------------------------------------------------------------------------------------------------
+public OnGetSyncManifest( Handle:hndl, CURLcode:code, any:data ) {
+	// phase1
+	CloseHandle(hndl);
+	new Handle:file;
+	decl String:tempfile[256]; 
+	ResetPack(data);
+	file = Handle:ReadPackCell(data);
+	ReadPackString( data, tempfile, sizeof tempfile );
+	CloseHandle(data);
+	CloseHandle(file);
+	
+	if( code != CURLE_OK ) {
+		OperationError( "couldn't retrieve manifest." );
+		CompleteOperation();
+		return;
+	}
+	
+	// parse manifest
+	new Handle:kv = CreateKeyValues( "servertools_manifest" );
+	if( !FileToKeyValues( kv, tempfile ) ) {
+		CloseHandle(kv);
+		OperationError( "couldn't parse manifest." );
+		CompleteOperation();
+		return;
+	}
+	
+	if( !KvJumpToKey( kv, "packages" ) || !KvGotoFirstSubKey( kv ) ) {
+		CloseHandle(kv);
+		OperationError( "no packages in manifest." );
+		CompleteOperation();
+		return;
+	}
+	
+	OperationLog( "parsing manifest..." );
+	
+	sync_plugins = CreateTrie();
+	Sync_WhitelistPlugins();
+	
+	
+	sync_list = CreateDataPack();
+	new Handle:file_filter = CreateTrie(); // file_filter is used to cancel duplicate files (ie multiple packages sharing files)
+	
+	do {
+		decl String:packagename[64];
+		KvGetSectionName( kv, packagename, sizeof packagename );
+		decl String:target[64];
+		KvGetString( kv, "target", target, sizeof target, "" );
+		if( target[0] == 0 ) {
+			
+			OperationError( "package \"%s\" is missing target", packagename );
+			continue;
+		}
+		
+		if( !IsTarget( target ) ) continue;
+		
+		OperationLog( "reading package \"%s\"...", packagename );
+		if( KvGetNum( kv, "disabled", 0 ) != 0 ) {
+			OperationLog( "skipping -- package is disabled.", packagename ); 
+			continue;
+		}
+		
+		if( KvJumpToKey( kv, "files" ) ) {
+			if( KvGotoFirstSubKey( kv, false ) ) {
+			
+				do {
+					decl String:filename[128];
+					decl String:remote[128];
+					KvGetSectionName( kv, filename, sizeof filename );
+					TrimString(filename);
+					if( filename[0] == 0 ) continue;
+					if( !FormatLocalPath( filename, sizeof filename, filename ) ) {
+						OperationError( "package \"%s\" :: bad path: \"%s\"", packagename, filename );
+						continue;
+					}
+					
+					KvGetString( kv, NULL_STRING, remote, sizeof remote, "" );
+					TrimString( remote );
+					
+					new plugin_mode = 0;
+					if( StrContains( remote, "?install" ) != -1 ) {
+						ReplaceString( remote, sizeof remote, "?install", "" );
+						plugin_mode = 1;
+					}
+					if( StrContains( remote, "?ignore" ) != -1 ) {
+						ReplaceString( remote, sizeof remote, "?ignore", "" );
+						plugin_mode = 2;
+					}
+					TrimString( remote );
+					if( remote[0] != 0 ) {
+						
+						if( !FormatLocalPath( remote, sizeof remote, remote ) ) {
+							OperationError( "package \"%s\" :: bad path: \"%s\"", packagename, remote );
+							continue;
+						}
+					}
+					
+					if( FileIsNormalPlugin( filename ) ) {
+						if( SetTrieValue( sync_plugins, filename, 1, false ) ) {
+							
+						}
+						
+						if( !sync_reinstall &&  plugin_mode == 1 ) {
+							if( FileExists( filename ) ) {
+								OperationLog( "--plugin \"%s\" exists, skipping (install mode).", filename );
+								continue; // plugin exists, don't update in "install" mode
+							}
+							if( TryCopyDisabledPlugin( filename ) ) {
+								OperationLog( "--plugin \"%s\" moving from disabled folder (install mode).", filename );
+								continue;
+							}
+						} else if( plugin_mode == 2 ) {
+							continue; // ignore the state of this plugin
+						}
+						
+					} else if( plugin_mode == 2 ) {
+					
+						OperationError( "packages \"%s\" :: plugin option used for normal file. skipping", packagename );
+						continue;
+					} else if( plugin_mode == 1 ) {
+						if( FileExists( filename ) ) {
+							OperationLog( "--file \"%s\" :: skipping (install mode)", filename );
+							continue;
+						}
+					}
+					
+					
+					
+					new dummy;
+					// add to downloads if file is unique
+					if( !GetTrieValue( file_filter, filename, dummy ) ) {
+						SetTrieValue( file_filter, filename, 1 );
+						WritePackString( sync_list, filename );
+						
+						if( remote[0] != 0 ) {
+							
+							WritePackString( sync_list, remote );
+						} else {
+							WritePackString( sync_list, filename );
+						}
+						
+					}
+				
+				} while( KvGotoNextKey( kv, false ) );
+				
+				KvGoBack( kv );
+				
+			}
+			KvGoBack( kv );
+		}
+		
+		
+	} while( KvGotoNextKey( kv ) );
+	CloseHandle( kv );
+	CloseHandle( file_filter );
+	 
+	ResetPack( sync_list );
+	sync_updates = CreateDataPack();
+	
+	sync_hashes = LoadFileHashes();
+	
+	ResetPack( sync_list );
+	UpdateBinaryHashes();
+}
+
+//-------------------------------------------------------------------------------------------------
+UpdateBinaryHashes() {
+	
+	while( IsPackReadable( sync_list, 1 ) ) {
+		
+		decl String:file[128];
+		decl String:remote[128];
+		ReadPackString( sync_list, file, sizeof file ); // local path
+		ReadPackString( sync_list, remote, sizeof remote ); // remote path
+		
+		if( !FileExists(file) ) continue;
+		
+		decl String:ext[32];
+		GetFileExt( ext, sizeof ext, file );
+		if( TrieSet( sync_binaries, ext ) ) {
+			// this is a binary file, hash it client-side
+			
+			OperationLog( "Hashing binary file: \"%s\"...", file );
+			new Handle:data = CreateDataPack();
+			WritePackString( data, file );
+			curl_hash_file( file, Openssl_Hash_MD4, OnFileHashed, data );
+			return;
+		}
+	}
+	
+	ResetPack( sync_list );
+	ProcessSyncFiles();
+}
+
+//-------------------------------------------------------------------------------------------------
+public OnFileHashed( const bool:success, const String:buffer[], any:data ) {
+	decl String:file[128];
+	ResetPack(data);
+	ReadPackString( data, file, sizeof file );
+	CloseHandle(data);
+	OperationLog( "--%s", buffer );
+	
+	KvJumpToKey( sync_hashes, file, true );
+	KvSetString( sync_hashes, NULL_STRING, buffer );
+	KvGoBack( sync_hashes );
+	
+	UpdateBinaryHashes();
+}
+
+//-------------------------------------------------------------------------------------------------
+ProcessSyncFiles() {
+	// phase2
+	
+	new start = GetPackPosition( sync_list );
+	if( !IsPackReadable( sync_list, 1 ) ) {
+		ResetPack( sync_updates );
+		Sync_GetUpdate(); 
+		return;
+	}
+	
+	// request file hashes
+	new Handle:curl = curl_easy_init();
+	curl_easy_setopt_int_array( curl, CURLDefaultOpt, sizeof( CURLDefaultOpt ) );
+	decl String:url[512];
+	FormatEx( url, sizeof url, "%s%s?%s", sync_url, sync_listing, url_request_params );
+	 
+	decl String:tempfile[256];
+	GetTempFile( tempfile, sizeof(tempfile) );
+	new Handle:outfile = curl_OpenFile( tempfile, "wb" );
+	curl_easy_setopt_string( curl, CURLOPT_URL, url );
+	curl_easy_setopt_handle( curl, CURLOPT_WRITEDATA, outfile );
+	new Handle:post = curl_httppost();
+	
+	// create request
+	for( new i = 0; i < 25; i ++ ) { 
+		if( !IsPackReadable( sync_list, 1 ) ) break;
+		decl String:postname[8];
+		decl String:file[128];
+		ReadPackString( sync_list, file, sizeof file ); // local path
+		ReadPackString( sync_list, file, sizeof file ); // remote path (desired)
+		FormatEx( postname, sizeof postname, "%d", i+1 );
+		curl_formadd( post, CURLFORM_COPYNAME, postname, CURLFORM_COPYCONTENTS, file, CURLFORM_END ); 
+	}
+	sync_list_next = GetPackPosition( sync_list );
+	SetPackPosition( sync_list,start );
+	
+	curl_easy_setopt_handle( curl, CURLOPT_HTTPPOST, post );
+	
+	new Handle:pack = CreateDataPack();
+	WritePackCell( pack, _:outfile );
+	WritePackString( pack, tempfile );
+	curl_easy_perform_thread( curl, Sync_OnGetHashes, pack );
+	 
+}
+
+//-------------------------------------------------------------------------------------------------
+public Sync_OnGetHashes( Handle:hndl, CURLcode:code, any:data ) {
+	CloseHandle(hndl);
+	new Handle:file;
+	decl String:tempfile[256]; 
+	ResetPack(data);
+	file = Handle:ReadPackCell(data);
+	ReadPackString( data, tempfile, sizeof tempfile );
+	CloseHandle(data);
+	CloseHandle(file);
+	
+	if( code != CURLE_OK ) {
+		OperationError( "couldn't retrieve file hashes." );
+		CompleteOperation();
+		return;
+	}
+	
+	file = OpenFile( tempfile, "rb" );
+	
+	new file_index = 0;
+	
+	decl String:buffer[64];
+	ReadFileLine( file, buffer, sizeof buffer );
+	TrimString(buffer);
+	if( !StrEqual( buffer, "HASH/LISTING" ) ) {
+		OperationError( "couldn't retrieve file hashes." );
+		CompleteOperation();
+		return;
+	}
+	
+	while( ReadFileLine( file, buffer, sizeof buffer ) ) { 
+		file_index++;
+		
+		TrimString(buffer);
+		if( buffer[0] == 0 ) continue;
+		if( !StrEqual( buffer,"HASH" ) ) {
+			CloseHandle(file);
+			OperationError( "fatal - remote hashlist error (1) data:%s", buffer );
+			CompleteOperation();
+			return;
+		}
+		
+		ReadFileLine( file, buffer, sizeof buffer  ); // index
+		TrimString(buffer);
+		if( StringToInt(buffer) != file_index ) {
+			CloseHandle(file);
+			OperationError( "fatal - remote hashlist error (2)" );
+			CompleteOperation();
+			return;
+		}
+ 
+		ReadFileLine( file, buffer, sizeof buffer  ); // hash
+		TrimString(buffer);
+		
+		decl String:localfile[128];
+		decl String:remotefile[128];
+		ReadPackString( sync_list, localfile, sizeof localfile );
+		ReadPackString( sync_list, remotefile, sizeof remotefile );
+		if( StrEqual( buffer, "MISSING" ) ) {
+			OperationError( "remote file MISSING: %s", remotefile );
+			continue;
+		}
+		
+		// check hash table for file
+		if( FileExists( localfile ) && KvJumpToKey( sync_hashes, localfile ) ) {
+			decl String:hash[128];
+			KvGetString( sync_hashes, NULL_STRING, hash, sizeof hash );
+			KvGoBack( sync_hashes );
+			if( StrEqual( hash, buffer ) ) {
+				// file is up to date
+				OperationLog( "\"%s\" is up-to-date.", localfile );
+				continue;
+			}
+		}
+		
+		OperationLog( "\"%s\" marked; hash=%s", localfile, buffer );
+		WritePackString( sync_updates, remotefile );
+		WritePackString( sync_updates, localfile );
+		WritePackString( sync_updates, buffer ); //hash
+	//	WritePackCell( sync_updates, filesize ); 
+		
+	}
+	CloseHandle(file);
+	
+	if( GetPackPosition( sync_list ) != sync_list_next ) {
+		OperationError( "fatal - checkpoint failure" );
+		CompleteOperation();
+		return;
+	}
+	//DeleteFile( tempfile ); debug
+	
+	ProcessSyncFiles();
+}
+
+//-------------------------------------------------------------------------------------------------
+Sync_GetUpdate() {
+	// phase3
+
+	if( !IsPackReadable( sync_updates, 1 ) ) {	
+		SaveFileHashes( sync_hashes );
+		Sync_AdjustPlugins();
+		return;
+	}
+	
+	
+	decl String:file[128];
+	ReadPackString( sync_updates, file, sizeof file );
+	
+	OperationLog( "getting \"%s\"...", file );
+	
+	new Handle:curl = curl_easy_init();
+	curl_easy_setopt_int_array( curl, CURLDefaultOpt, sizeof( CURLDefaultOpt ) );
+	decl String:url[512];
+	FormatEx( url, sizeof url, "%s%s?%s", sync_url, file, url_request_params );
+	
+	decl String:tempfile[256];
+	GetTempFile( tempfile, sizeof(tempfile) );
+	new Handle:outfile = curl_OpenFile( tempfile, "wb" );
+	curl_easy_setopt_string( curl, CURLOPT_URL, url );
+	curl_easy_setopt_handle( curl, CURLOPT_WRITEDATA, outfile );
+	
+	new Handle:pack = CreateDataPack();
+	WritePackCell( pack, _:outfile );
+	WritePackString( pack, tempfile );
+	curl_easy_perform_thread( curl, Sync_OnFileDownloaded, pack );
+}
+
+#define HTTP_RESPONSE_OK 200
+
+//-------------------------------------------------------------------------------------------------
+public Sync_OnFileDownloaded( Handle:hndl, CURLcode:code, any:data ) {
+	
+	new Handle:file;
+	decl String:tempfile[256]; 
+	ResetPack(data);
+	file = Handle:ReadPackCell(data);
+	ReadPackString( data, tempfile, sizeof tempfile );
+	CloseHandle(data);
+	CloseHandle(file);
+	
+	new response;
+	curl_easy_getinfo_int(hndl,CURLINFO_RESPONSE_CODE,response);
+	if( code != CURLE_OK || response != HTTP_RESPONSE_OK ) {
+		CloseHandle(hndl);
+		OperationError( "fatal: error retrieving file." );
+		CompleteOperation();
+		return;
+	}
+	CloseHandle(hndl);
+	
+	decl String:localfile[128];
+	decl String:hash[128];
+	ReadPackString( sync_updates, localfile, sizeof localfile );
+	ReadPackString( sync_updates, hash, sizeof hash );
+ 
+	if( !PrimeFileTarget( localfile ) ) {
+		OperationError( "fatal: disk error (prime path)" );
+		CompleteOperation();
+		return;
+	}
+	
+	decl String:ext[32];
+	GetFileExt( ext, sizeof ext, localfile );
+	if( TrieSet( pp_trie, ext ) ) {
+		PreprocessFile( tempfile, sizeof tempfile );
+	}
+	
+	if( !RenameFile( localfile, tempfile ) ) {
+		OperationError( "fatal: disk error (move file)" );
+		CompleteOperation();
+		return;
+	}
+	
+	if( KvJumpToKey( sync_hashes, localfile, true ) ) {
+		KvSetString( sync_hashes, NULL_STRING, hash );
+		KvGoBack( sync_hashes );
+	}
+	
+	Sync_GetUpdate();
+}
+
+//-------------------------------------------------------------------------------------------------
+AdjustPluginsFunction( const String:path[], bool:toplevel=false ) {
+	new Handle:dir = OpenDirectory( path );
+	new plstart = StrContains( path, "plugins" ) + 8;
+	decl String:entry[256];
+	new FileType:ft;
+	while( ReadDirEntry( dir, entry, sizeof entry, ft ) ) {
+		if( ft == FileType_Directory ) {
+			if( StrEqual( entry, "." ) ||
+				StrEqual( entry, ".." ) ||
+				toplevel && StrEqual( entry, "disabled" ) ||
+				toplevel && StrEqual( entry, "optional" ) ) 
+				continue;
+				
+			decl String:subdir[128];
+			FormatEx( subdir, sizeof subdir, "%s/%s", path, entry );
+			AdjustPluginsFunction( subdir );
+		} else if( ft == FileType_File ) {
+			new dummy;
+			
+			decl String:fullpath[128];
+			FormatEx( fullpath, sizeof fullpath, "%s/%s", path, entry );
+			if( !GetTrieValue( sync_plugins, fullpath, dummy ) ) {
+				// disable plugin
+				OperationLog( "disabling plugin: \"%s\".", fullpath[plstart] );
+				DisablePlugin( fullpath );
+			}
+		}
+	}
+	CloseHandle( dir );
+}
+
+//-------------------------------------------------------------------------------------------------
+Sync_AdjustPlugins() {
+	// phase4
+	
+	
+	if( sync_checkplugins ) {
+		// move unmarked plugins to /disabled/
+		decl String:plugins_dir[128];
+		BuildPath( Path_SM, plugins_dir, sizeof plugins_dir, "plugins" );
+		ReplaceString( plugins_dir, sizeof(plugins_dir), "\\", "/" );
+		
+		OperationLog( "scanning plugins..." );
+		
+		AdjustPluginsFunction( plugins_dir, true );
+	} else {
+		OperationLog( "skipping plugin scan (checkplugins=0)" );
+	}
+	
+	SetLastSync();
+	if( initial_sync ) {
+		// reload map if no players are playing
+		new bool:reload = true;
+		for( new i = 1; i <= MaxClients; i++ ) {
+			if( IsClientInGame(i) && GetClientTeam(i) > 1 ) {
+				reload=false;
+				break;
+			}
+		}
+		if( reload ) {
+			decl String:map[64];
+			GetCurrentMap( map, sizeof map );
+			ForceChangeLevel( map, "Post-Sync" );
+		}
+	}
+	
+	
+	CompleteOperation();
+}
+
+//-------------------------------------------------------------------------------------------------
+SAFE_CLOSE_HANDLE( &Handle:h ) {
+	if( h == INVALID_HANDLE ) return;
+	CloseHandle(h);
+	h = INVALID_HANDLE;
+}
+
+//-------------------------------------------------------------------------------------------------
+Sync_Cleanup() {
+	SAFE_CLOSE_HANDLE( sync_list );
+	SAFE_CLOSE_HANDLE( sync_updates );
+	SAFE_CLOSE_HANDLE( sync_hashes );
+	SAFE_CLOSE_HANDLE( sync_plugins );
+}

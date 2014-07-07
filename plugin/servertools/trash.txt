@@ -1,0 +1,1186 @@
+
+// legacy removed code :'(
+// todo: find a home for this shit
+
+new String:http_url[512];
+new String:http_listing_file[256];
+
+new String:sync_url[512];
+new String:sync_manifest[256];
+new String:sync_listing[256];
+new Handle:sync_binaries;
+new sync_checkplugins;
+
+
+//-------------------------------------------------------------------------------------------------
+new String:ftp_url[512]; 
+new String:ftp_auth[256];
+//new String:ftp_dir[512];
+
+
+//-------------------------------------------------------------------------------------------------
+StartFTPDownload( const String:source[], const String:dest[] ) {
+	decl String:url[512];
+	decl String:path[512];
+	if( !FormatFTPUrl( url, sizeof(url), source ) ) {
+		PrintToServer( "error: invalid source" );
+		return;
+	}
+	if( !FormatLocalPath( path, sizeof(path), dest ) ) {
+		PrintToServer( "error: invalid destination (bad path)" );
+		return;
+	}
+	AddPathSlash(path,sizeof path);
+	if( !FileDirExists( path ) ) {
+		PrintToServer( "error: invalid destination (directory doesnt exist)" );
+		return;
+	}
+	
+	// setup working directories
+	StripFileName( path_source, sizeof(path_source), url );
+	StripFileName( path_dest, sizeof(path_dest), path );
+	StripFilePath( op_pattern, sizeof(op_pattern), url );
+	LoadPatternRegex();
+	 
+	if( url[strlen(url)-1] == '/' ) {
+		// invalid source
+		PrintToServer( "[ST] error: Invalid source; for directory transfers use -r path/*" );
+		return;
+	}
+	new bool:multi = IsMultiTransfer(source);
+
+	StartOperation( multi ? "FTP Multiple File Download" : "FTP Single File Download" );
+	dl_source_domain = DOMAIN_FTP;
+	EraseFilePack(); 
+
+	if( multi ) {
+		// get directory
+		DownloadMulti( "" );
+	} else {
+		// get single file
+		DownloadFile( op_pattern );
+	}
+}
+
+/*
+new op_state;
+new String:op_name[64];
+//new String:operation_response[256];
+//new operation_code;
+
+//new operation_files_failed;
+new operation_files_transferred;
+new operation_errors;
+//new operation_threads;
+
+//new Handle:op_curl;
+new Handle:op_stack;
+new Handle:op_logfile;
+new String:op_logfile_path[128];
+
+new Handle:op_filepack = INVALID_HANDLE;
+
+new bool:op_directory_recursive;
+new bool:op_delete_source;*/
+
+
+/*
+//-------------------------------------------------------------------------------------------------
+enum {
+	STATE_READY,	// waiting for operation to be executed
+	STATE_BUSY,		// an operation is in progress
+	STATE_COMPLETED // waiting for remote to read response and reset
+};
+*/
+/*
+//-------------------------------------------------------------------------------------------------
+public Action:Command_reset( args ) {
+	// todo
+	if( op_state == STATE_COMPLETED ) {
+		op_state = STATE_READY;
+		if( FileExists( op_logfile_path ) ) {
+			DeleteFile( op_logfile_path );
+		}
+		PrintToServer( "#002 RESET OK" );
+	} else if( op_state == STATE_BUSY ) {
+		PrintToServer( "#001 OPERATION IN PROGRESS" );
+	} else if( op_state == STATE_READY ) {
+		PrintToServer( "#000 SYSTEM IS READY" );
+	}
+	return Plugin_Handled;
+} */
+/*
+//-------------------------------------------------------------------------------------------------
+StartOperation( const String:name[] ) {
+	WakeServer();
+	EraseStack();
+	op_state = STATE_BUSY;
+	//operation_files_failed = 0;
+	operation_files_transferred = 0;
+	operation_errors = 0;
+	GetTempFile( op_logfile_path, sizeof( op_logfile_path ) );
+	op_logfile = OpenFile( op_logfile_path, "w" );
+	LogToFile( logfile, "-----------------------------------------------------------------------" );
+	LogToFile( logfile, "starting operation: %s", name );
+	//PrintToServer( "[ST] Starting operation: %s", name );
+	strcopy( op_name, sizeof op_name, name );
+}*/
+/*
+//-------------------------------------------------------------------------------------------------
+OperationError( const String:reason_fmt[], any:... ) {
+	decl String:reason[256];
+	VFormat( reason, sizeof(reason), reason_fmt, 2 );
+
+	if( op_logfile != INVALID_HANDLE ) {
+		WriteFileLine( op_logfile, "error: %s", reason );
+	}
+	
+	operation_errors++;
+
+	LogToFile( logfile, "error: %s", reason );
+	//PrintToServer( "[ST] Error: %s", reason );
+}*/
+/*
+//-------------------------------------------------------------------------------------------------
+OperationLog( const String:reason_fmt[], any:... ) {
+	decl String:reason[256];
+	VFormat( reason, sizeof(reason), reason_fmt, 2 );
+
+	if( op_logfile != INVALID_HANDLE ) {
+		WriteFileLine( op_logfile, "%s", reason );
+	}
+	LogToFile( logfile, "%s", reason );
+	//PrintToServer( "[ST] %s", reason );
+}*/
+/*
+//-------------------------------------------------------------------------------------------------
+PostUpload() {
+
+	if( !op_delete_source ) return;
+
+	// move operation - delete source files
+	ResetPack( op_filepack );
+	for( new i = 0; i < operation_files_transferred; i++ ) {
+		decl String:file[256];
+		ReadPackString( op_filepack, file, sizeof(file) );
+		Format( file, sizeof( file ), "%s%s", path_source, file );
+		if( !DeleteFile( file ) ) {	
+			OperationError( "couldn't delete file: %s", file );
+		} else {
+			OperationLog( "deleted file: %s", file );
+		}
+	}
+
+}*/
+
+
+/*
+//-------------------------------------------------------------------------------------------------
+public OnGetDirListing( Handle:hndl, CURLcode:code, any:data ) {
+	CloseHandle(hndl);
+	new Handle:file;
+	decl String:tempfile[256];
+	decl String:dir[256];
+	ResetPack(data);
+	file = Handle:ReadPackCell(data);
+	ReadPackString( data, tempfile, sizeof(tempfile) );
+	ReadPackString( data, dir, sizeof(dir) );
+	CloseHandle(data);
+	CloseHandle(file);
+
+	if( code == CURLE_OK ) {
+		// no error
+	} else {
+		DeleteFile( tempfile );
+		OperationError( "couldnt get directory listing from %s%s", path_source, dir );
+		ContinueDownload();
+		return;
+	}
+	file = OpenFile( tempfile, "r" );
+	
+	// push stack in this order: tempfile -> directory -> file
+	PushStackString( op_stack, tempfile );
+	PushStackString( op_stack, dir );
+	PushStackCell( op_stack, file );
+	
+	ContinueDownload();
+}*/
+/*
+//-------------------------------------------------------------------------------------------------
+AddFileDownloaded( const String:tempfile[], const String:filepath[] ) {
+	operation_files_transferred++;
+	WritePackString( op_filepack, tempfile );
+	WritePackString( op_filepack, filepath );
+	OperationLog( "File retrieved: %s%s", path_source, filepath );
+}
+
+//-------------------------------------------------------------------------------------------------
+AddFileCopied( const String:file[] ) {
+	operation_files_transferred++;
+	WritePackString( op_filepack, file );
+	OperationLog( "File copied: %s%s", path_source, file );
+}*/
+/*
+//-------------------------------------------------------------------------------------------------
+AddFileUploaded( const String:filepath[] ) {
+	operation_files_transferred++;
+	WritePackString( op_filepack, filepath );
+	OperationLog( "File sent: %s%s", path_source, filepath );
+}
+
+//-------------------------------------------------------------------------------------------------
+public OnFileDownloadComplete( Handle:hndl, CURLcode:code, any:data ) {
+	CloseHandle(hndl);
+	ResetPack(data);
+	new Handle:file = Handle:ReadPackCell(data);
+	decl String:filepath[256];
+	ReadPackString( data, filepath, sizeof(filepath) );
+	decl String:tempfile[256];
+	ReadPackString( data, tempfile, sizeof(tempfile) );
+	CloseHandle(file);
+
+	if( code != CURLE_OK ) {
+		OperationError( "couldn't download file (code %d): %s%s", code, path_source, filepath );
+	 
+	} else {
+		AddFileDownloaded( tempfile, filepath );
+	}
+	ContinueDownload();
+}*/
+/*
+//-------------------------------------------------------------------------------------------------
+bool:DownloadFile( const String:file[] ) {
+	
+	// file = full file path from working directory
+	decl String:url[512];
+	Format( url, sizeof(url), "%s%s", path_source, file );
+	 
+	decl String:tempfile[256];
+	GetTempFile( tempfile, sizeof(tempfile) );
+
+	// create curl instance
+	new Handle:curl = curl_easy_init();
+	curl_easy_setopt_int_array( curl, CURLDefaultOpt, sizeof( CURLDefaultOpt ) );
+
+	if( dl_source_domain == DOMAIN_FTP ) {
+		curl_easy_setopt_string( curl, CURLOPT_USERPWD, ftp_auth );
+	}
+
+
+	new Handle:outfile = curl_OpenFile( tempfile, "wb" );
+	curl_easy_setopt_string( curl, CURLOPT_URL, url );
+	curl_easy_setopt_handle( curl, CURLOPT_WRITEDATA, outfile );
+	  
+	new Handle:pack = CreateDataPack();
+	WritePackCell( pack, _:outfile );
+	WritePackString( pack, file );
+	WritePackString( pack, tempfile );
+	
+	curl_easy_perform_thread( curl, OnFileDownloadComplete, pack );
+	return true;
+
+}*/
+/*
+//-------------------------------------------------------------------------------------------------
+bool:DownloadMulti( const String:dir[] ) {
+	decl String:directory_url[512];
+	
+	if( dl_source_domain == DOMAIN_FTP ) {
+		Format( directory_url, sizeof(directory_url), "%s%s", path_source, dir ); 
+	} else if( dl_source_domain == DOMAIN_HTTP ) {
+		Format( directory_url, sizeof(directory_url), "%s%s", path_source_httplisting, dir ); 
+	} else {
+		SetFailState( "fatal error." );
+	}
+
+
+	// create curl instance
+	new Handle:curl = curl_easy_init();
+	curl_easy_setopt_int_array( curl, CURLDefaultOpt, sizeof( CURLDefaultOpt ) );
+
+	if( dl_source_domain == DOMAIN_FTP ) {
+		curl_easy_setopt_string( curl, CURLOPT_USERPWD, ftp_auth );
+	}
+
+
+	// request ftp listing
+	decl String:tempfile[256];
+	GetTempFile( tempfile, sizeof(tempfile) );
+	new Handle:outfile = curl_OpenFile( tempfile, "wb" );
+	 
+	curl_easy_setopt_string( curl, CURLOPT_URL, directory_url );
+	curl_easy_setopt_handle( curl, CURLOPT_WRITEDATA, outfile );
+	 
+	new Handle:pack = CreateDataPack();
+	WritePackCell( pack, _:outfile );
+	WritePackString( pack, tempfile );
+	WritePackString( pack, dir );
+
+	curl_easy_perform_thread( curl, OnGetDirListing, pack );
+	return true;
+}
+
+//-------------------------------------------------------------------------------------------------
+public OnFileUploadComplete( Handle:hndl, CURLcode:code, any:data ) {
+	CloseHandle(hndl);
+	ResetPack(data);
+	new Handle:file = Handle:ReadPackCell(data);
+	CloseHandle(file);
+	decl String:path[256];
+	ReadPackString( data, path, sizeof(path) );
+	CloseHandle(data);
+
+	if( code != CURLE_OK ) {
+		OperationError( "couldn't upload file (code %d): %s%s", code, path_source, path );
+	} else {
+		AddFileUploaded( path );
+	}
+	ContinueUpload();
+}*/
+/*
+//-------------------------------------------------------------------------------------------------
+bool:TransferFileToFTP( const String:file[] ) {
+	decl String:url[512];
+	Format( url, sizeof url, "%s%s", path_dest, file );
+
+	decl String:src[512];
+	Format( src, sizeof src, "%s%s", path_source, file );
+
+	new Handle:curl = curl_easy_init();
+	curl_easy_setopt_int_array( curl, CURLDefaultOpt, sizeof( CURLDefaultOpt ) );
+	curl_easy_setopt_string( curl, CURLOPT_USERPWD, ftp_auth );
+	curl_easy_setopt_string( curl, CURLOPT_URL, url );
+	
+	curl_easy_setopt_int( curl, CURLOPT_UPLOAD, 1 );
+	curl_easy_setopt_int( curl, CURLOPT_FTP_CREATE_MISSING_DIRS, CURLFTP_CREATE_DIR );
+	new Handle:infile = curl_OpenFile( src, "rb" );
+	if( infile == INVALID_HANDLE ) {
+		OperationError( "couldn't open file." );
+		CloseHandle(curl);
+		return false;
+	}
+	curl_easy_setopt_handle( curl, CURLOPT_READDATA, infile );
+
+	new Handle:pack = CreateDataPack();
+	WritePackCell( pack, _:infile );
+	WritePackString( pack, file );
+	
+	curl_easy_perform_thread( curl, OnFileUploadComplete, pack );
+	return true;
+}*/
+/*
+//-------------------------------------------------------------------------------------------------
+bool:TransferMultiToFTP( const String:dir[] ) {
+	decl String:directory_path[512];
+	Format( directory_path, sizeof directory_path, "%s%s", path_source, dir );
+
+	new Handle:opendir = OpenDirectory(directory_path);
+	
+	if( opendir == INVALID_HANDLE ) {
+		OperationError( "couldn't browse directory." );
+		return false;
+	}
+	
+	PushStackString( op_stack, dir );
+	PushStackCell( op_stack, _:opendir );
+
+	ContinueUpload();
+	return true;
+}*/
+/*
+//-------------------------------------------------------------------------------------------------
+bool:ParseListingFilename( String:filename[], maxlen, const String:filestring[], &bool:isdirectory ) {
+	if( strlen(filestring) == 0 ) {
+		return false; // empty line!
+	}
+
+	if( dl_source_domain == DOMAIN_FTP ) {
+		
+		// ftp directory listings are NOT a standard and this will most likely break on a lot of ftp servers :)
+
+		// assuming this format:
+		// -rw-r--r--    1 1183     400             3 Jun 06 22:08 test2.txt
+		decl String:mod[64];
+		decl String:arg[64];
+		new index = BreakString( filestring, mod, sizeof(mod) ); // mod
+		index += BreakString( filestring[index], arg, sizeof(arg) ); // "1"
+		index += BreakString( filestring[index], arg, sizeof(arg) ); // "1183"
+		index += BreakString( filestring[index], arg, sizeof(arg) ); // "400"
+		index += BreakString( filestring[index], arg, sizeof(arg) ); // size
+		index += BreakString( filestring[index], arg, sizeof(arg) ); // month
+		index += BreakString( filestring[index], arg, sizeof(arg) ); // day
+		index += BreakString( filestring[index], arg, sizeof(arg) ); // time
+
+		strcopy( filename, maxlen, filestring[index] ); // filename
+	
+		if( mod[0] == 'd' ) {
+			isdirectory = true;
+		} else {
+			isdirectory = false;
+		}
+		return true;
+	} else {
+
+		// assuming this format:
+		// <filetype> <filename>
+		decl String:arg[64];
+		new index = BreakString( filestring, arg, sizeof(arg) );
+		TrimString(arg);
+		if( StrEqual(arg, "dir") ) {
+			isdirectory = true;
+		} else if( StrEqual( arg,"file" ) ) {
+			isdirectory=false;
+		} else {
+			return false; // invalid file type
+		}
+		strcopy( filename, maxlen, filestring[index] );
+		
+		if( StrEqual( filename, "." ) ) return false; // catch these special directories
+		if( StrEqual( filename, ".." ) ) return false;
+
+		return true;
+	}
+}*/
+/*
+bool:FilePatternMatch( const String:filename[] ) {
+	
+	return MatchRegex( op_pattern_regex, filename ) > 0;
+}*/
+/*
+ContinueUpload() {
+	new bool:ending = false;
+	while( !ending ) {
+		if( IsStackEmpty( op_stack ) ) {
+			ending = true;
+			break;
+		}
+
+		new Handle:dir;
+		decl String:dirpath[256];
+		PopStackCell( op_stack, dir );
+		PopStackString( op_stack, dirpath, sizeof dirpath );
+		
+		decl String:nextfile[256];
+		new FileType:ftype;
+		if( !ReadDirEntry( dir, nextfile, sizeof nextfile, ftype ) ) {
+			// end of directory
+			CloseHandle(dir);
+			continue;
+		}
+		
+		PushStackString( op_stack, dirpath );
+		PushStackCell( op_stack, _:dir );
+		
+		if( StrEqual( nextfile, "." ) ) continue; // skip these dirs...
+		if( StrEqual( nextfile, ".." ) ) continue;
+
+		new bool:patternmatch = FilePatternMatch( nextfile );
+		Format( nextfile, sizeof nextfile, "%s%s", dirpath, nextfile );
+
+		if( ftype == FileType_Directory ) {
+			if( op_directory_recursive ) {
+				StrCat( nextfile, sizeof nextfile, "/" );
+				if( TransferMultiToFTP( nextfile ) ) return;
+				continue;
+			}
+			continue;
+		} else if( ftype == FileType_Unknown  ) {
+			continue;
+		}
+
+		if( patternmatch ) {
+			if( TransferFileToFTP( nextfile ) ) return;
+			continue;
+		} else {
+			continue;
+		}
+	}
+
+	PostUpload();
+	CompleteOperation();
+}
+
+//-------------------------------------------------------------------------------------------------
+ContinueDownload() {
+
+	new bool:ending = false;
+
+	while( !ending ) {
+		if( IsStackEmpty(op_stack) ) {
+			ending = true;
+			
+			break;
+		}
+
+		new Handle:listing;
+		decl String:dir[256];
+		PopStackCell( op_stack, listing );
+		PopStackString( op_stack, dir, sizeof dir );
+
+		if( IsEndOfFile( listing )  ) {
+			CloseHandle(listing);
+			decl String:listing_file[256];
+			PopStackString( op_stack, listing_file, sizeof(listing_file) );
+			DeleteFile( listing_file );
+			continue;
+		}
+
+		PushStackString( op_stack, dir );
+		PushStackCell( op_stack, listing );
+
+		decl String:filestring[256];
+		new bool:readresult = ReadFileLine( listing, filestring, sizeof filestring );
+
+		if( readresult == false ) {
+			continue;
+		}
+		
+		TrimString( filestring );
+		if( strlen(filestring) == 0 ) {
+			continue;
+		}
+		decl String:filename[128];
+		new bool:isdirectory; 
+		if( !ParseListingFilename( filename, sizeof(filename), filestring, isdirectory ) ) {
+			continue;
+		}
+		new bool:patternmatch = FilePatternMatch( filename );
+		Format( filename, sizeof(filename), "%s%s", dir, filename );
+
+		if( isdirectory ) {
+			if( op_directory_recursive ) {
+			 
+				StrCat( filename, sizeof(filename), "/" );
+				DownloadMulti( filename );
+				return;
+			}
+			continue;
+		}
+		if( patternmatch ) {
+			DownloadFile( filename );
+			return;
+		} else {
+			continue;
+		}
+	}
+	
+	ProcessDownloadedFiles();
+	CompleteOperation();
+}*/
+/*
+//-------------------------------------------------------------------------------------------------
+EraseStack() {
+	if( op_stack != INVALID_HANDLE ) {
+		CloseHandle(op_stack);
+	}
+	op_stack = CreateStack( 128/4 ); /// 128 chars
+}
+
+//-------------------------------------------------------------------------------------------------
+EraseFilePack() {
+	if( op_filepack != INVALID_HANDLE ) {
+		CloseHandle( op_filepack );
+	}
+	op_filepack = CreateDataPack();
+	ResetPack( op_filepack );
+}
+*/
+/*
+//-------------------------------------------------------------------------------------------------
+LoadPatternRegex() {
+	decl String:work[256];
+	strcopy( work, sizeof work, op_pattern );
+	ReplaceString( work, sizeof work, ".", "\\." );
+	ReplaceString( work, sizeof work, "[", "\\[" );
+	ReplaceString( work, sizeof work, "*", ".*" );
+	ReplaceString( work, sizeof work, "?", ".+" );
+	Format( work, sizeof(work), "^%s$", work );
+	if( op_pattern_regex != INVALID_HANDLE ) CloseHandle( op_pattern_regex );
+	op_pattern_regex = CompileRegex( work, 0 );
+}*/
+
+/*
+//-------------------------------------------------------------------------------------------------
+StartFTPUpload( const String:source[], const String:dest[] ) {
+	decl String:path[512];
+	decl String:url[512];
+	if( !FormatLocalPath( path, sizeof path, source ) ) {
+		PrintToServer( "[ST] error: invalid source (bad path)" );
+		return;
+	}
+	if( !FormatFTPUrl( url, sizeof url, dest ) ) {
+		PrintToServer( "[ST] error: invalid destination" );
+		return;
+	}
+	AddPathSlash( url, sizeof url );
+
+	StripFileName( path_source, sizeof path_source, path );
+	StripFileName( path_dest, sizeof path_dest, url );
+	StripFilePath( op_pattern, sizeof(op_pattern), path );
+	LoadPatternRegex();
+	 
+	if( path[strlen(path)-1] == '/' ) {
+		PrintToServer( "[ST] error: Invalid source; for directory transfers use -r path/*" );
+		return;
+	}
+	new bool:multi = IsMultiTransfer(source);
+	StartOperation( multi ? "FTP Multiple File Upload" : "FTP Single File Upload" );
+	EraseFilePack(); 
+
+	if( multi ) {
+		// get directory
+		if( !TransferMultiToFTP( "" ) ) ContinueUpload();
+	} else {
+		// get single file
+		if( !TransferFileToFTP( op_pattern ) ) ContinueUpload();
+	}
+}
+*/
+
+/*
+public OnGetHttpListing( Handle:hndl, CURLcode:code, any:data ) {
+	CloseHandle(hndl);
+	new Handle:file;
+	decl String:tempfile[256];
+	decl String:dir[256];
+	ResetPack(data);
+	file = Handle:ReadPackCell(data);
+	ReadPackString( data, tempfile, sizeof(tempfile) );
+	ReadPackString( data, dir, sizeof(dir) );
+	CloseHandle(data);
+	CloseHandle(file);
+
+	if( code == CURLE_OK ) {
+		// no error
+	} else {
+		DeleteFile( tempfile );
+		OperationError( "couldnt get directory listing from %s%s", path_source, dir );
+		ContinueDownload();
+		return;
+	}
+
+	file = OpenFile( tempfile, "rb" );
+	// push stack in this order: tempfile -> directory -> file
+	PushStackString( op_stack, tempfile );
+	PushStackString( op_stack, dir );
+	PushStackCell( op_stack, file );
+
+	ContinueDownload();
+
+//-------------------------------------------------------------------------------------------------
+bool:TransferFileFromHTTP( const String:file[] ) {
+	decl String:url[512];
+	Format( url, sizeof(url), "%s%s", path_source, file );
+
+	decl String:tempfile[256];
+	GetTempFile( tempfile, sizeof(tempfile) );
+
+	new Handle:curl = curl_easy_init();
+	curl_easy_setopt_int_array( curl, CURLDefaultOpt, sizeof( CURLDefaultOpt ) );
+	new Handle:outfile = curl_OpenFile( tempfile, "wb" );
+	curl_easy_setopt_string( curl, CURLOPT_URL, url );
+	curl_easy_setopt_handle( curl, CURLOPT_WRITEDATA, outfile );
+	  
+	new Handle:pack = CreateDataPack();
+	WritePackCell( pack, _:outfile );
+	WritePackString( pack, file );
+	WritePackString( pack, tempfile );
+	
+	curl_easy_perform_thread( curl, OnHttpDownloadComplete, pack );
+	return true;
+}
+
+//-------------------------------------------------------------------------------------------------
+bool:TransferMultiFromHTTP( const String:dir[] ) {
+	decl String:directory_url[512];
+	Format( directory_url, sizeof( directory_url ), "%s%s", path_source_httplisting, dir );
+
+	new Handle:curl = curl_easy_init();
+	curl_easy_setopt_int_array( curl, CURLDefaultOpt, sizeof( CURLDefaultOpt ) );
+	 
+	// request HTTP listing
+	decl String:tempfile[256];
+	GetTempFile( tempfile, sizeof(tempfile) );
+	new Handle:outfile = curl_OpenFile( tempfile, "wb" );
+	curl_easy_setopt_string( curl, CURLOPT_URL, directory_url );
+	curl_easy_setopt_handle( curl, CURLOPT_WRITEDATA, outfile );
+	new Handle:pack = CreateDataPack();
+	WritePackCell( pack, _:outfile );
+	WritePackString( pack, tempfile );
+	WritePackString( pack, dir );
+
+	curl_easy_perform_thread( curl, OnGetHttpListing, pack );
+	return true;
+}
+*/
+/*
+//-------------------------------------------------------------------------------------------------
+StartHTTPDownload( const String:source[],const String:dest[] ) {
+	decl String:url[512];
+	decl String:listingurl[512];
+	decl String:path[512];
+	if( !FormatHTTPUrl( url, sizeof(url), source ) ) {
+		PrintToServer( "error: invalid source" );
+		return;
+	}
+	if( !FormatHTTPListingUrl( listingurl, sizeof(listingurl), source ) ) {
+		PrintToServer( "error: invalid source" );
+		return;
+	}
+	if( !FormatLocalPath( path, sizeof(path), dest ) ) {
+		PrintToServer( "error: invalid destination (bad path)" );
+		return;
+	}
+	AddPathSlash(path,sizeof path);
+	if( !FileDirExists( path ) ) {
+		PrintToServer( "error: invalid destination (directory doesnt exist)" );
+		return;
+	}
+	
+	// setup working directories
+	StripFileName( path_source, sizeof(path_source), url );
+	StripFileName( path_source_httplisting, sizeof(path_source_httplisting), listingurl );
+	StripFileName( path_dest, sizeof(path_dest), path );
+	StripFilePath( op_pattern, sizeof(op_pattern), url );
+	LoadPatternRegex();
+	 
+	if( url[strlen(url)-1] == '/' ) {
+		// invalid source
+		PrintToServer( "[ST] error: Invalid source; for directory transfers use -r path/*" );
+		return;
+	}
+	new bool:multi = IsMultiTransfer(source);
+
+	StartOperation( multi ? "HTTP Multiple File Download" : "HTTP Single File Download" );
+	dl_source_domain = DOMAIN_HTTP;
+	EraseFilePack(); 
+ 
+	if( multi ) 
+		DownloadMulti( "" );
+	else
+		DownloadFile( op_pattern );
+}
+*/
+/*
+//-------------------------------------------------------------------------------------------------
+StartWebDownload( const String:source[], const String:dest[] ) {
+	decl String:url[512]; 
+	decl String:path[512];
+	if( !FormatWebUrl( url, sizeof(url), source  ) ) {
+		PrintToServer( "error: invalid source" );
+		return;
+	}
+	if( !FormatLocalPath( path, sizeof(path), dest ) ) {
+		PrintToServer( "error: invalid destination (bad path)" );
+		return;
+	}
+	AddPathSlash(path,sizeof path);
+	if( !FileDirExists( path ) ) {
+		PrintToServer( "error: invalid destination (directory doesnt exist)" );
+		return;
+	}
+	
+	// setup working directories
+	StripFileName( path_source, sizeof(path_source), url );
+	StripFileName( path_dest, sizeof(path_dest), path );
+	StripFilePath( op_pattern, sizeof(op_pattern), url );
+	LoadPatternRegex();
+	 
+	
+	if( url[strlen(url)-1] == '/' ) {
+		// invalid source
+		PrintToServer( "[ST] error: Invalid source" );
+		return;
+	}
+	new bool:multi = IsMultiTransfer(source);
+
+	if( multi ) {
+		PrintToServer( "[ST] error: Cannot do multi transfers from web/" );
+		return;
+	}
+
+	StartOperation( "Web File Download" );
+	dl_source_domain = DOMAIN_WEB;
+	EraseFilePack(); 
+ 
+	DownloadFile( op_pattern );
+}*/
+/*
+//-------------------------------------------------------------------------------------------------
+CopyFileSingle( const String:source[], const String:rename[] = "" ) {
+
+	decl String:fullsource[256], String:fulldest[256];
+	Format( fullsource, sizeof fullsource, "%s%s", path_source, source );
+	if( rename[0] == 0 ) {
+		Format(fulldest, sizeof fulldest, "%s%s", path_dest, source );
+	} else {
+		Format( fulldest, sizeof fulldest, "%s%s", path_dest, rename );
+	}
+
+	new Handle:infile = OpenFile( fullsource, "rb" );
+	if( infile == INVALID_HANDLE ) {
+		PrintToServer( "[ST] couldn't open %s for reading", fullsource );
+		return;
+	}
+	if( !PrimeFileTarget( fulldest ) ) {
+		CloseHandle(infile);
+		PrintToServer( "[ST] couldn't open %s for writing", fulldest );
+		return;
+	}
+	new Handle:outfile = OpenFile( fulldest, "wb" );
+	if( outfile == INVALID_HANDLE ) {
+		CloseHandle(infile);
+		PrintToServer( "[ST] couldn't open %s for writing", fulldest );
+		return;
+	}
+
+	new pos = 0;
+	new byte;
+	while( !IsEndOfFile( infile ) ) {
+		if( ReadFileCell( infile, byte, 1 ) == -1 ) {
+			if( pos != 0 ) {
+				PrintToServer( "[ST] a read error occurred" );
+			}
+			break;
+		}
+		if( !WriteFileCell( outfile, byte, 1 ) ) {
+			PrintToServer( "[ST] a write error occurred" );
+			break;
+		}
+		pos++;
+	}
+
+	AddFileCopied( source );
+
+	CloseHandle( infile );
+	CloseHandle( outfile );
+}
+*/
+/*
+//-------------------------------------------------------------------------------------------------
+CopyFileLoop( const String:dirpath[] ) {
+	decl String:dirpath2[256];
+	Format(dirpath2, sizeof dirpath2, "%s%s", path_source, dirpath );
+	
+	new Handle:dir = OpenDirectory( dirpath2 );
+	decl String:file[256];
+	new FileType:ft;
+	while( ReadDirEntry( dir, file, sizeof file, ft ) ) {
+		if( StrEqual( file, "." ) ) continue; // skip these dirs...
+		if( StrEqual( file, ".." ) ) continue;
+		decl String:filepath[256];
+		
+		Format( filepath, sizeof filepath, "%s%s", dirpath, file );
+
+		if( ft == FileType_Directory ) {
+			if( op_directory_recursive ) {
+				AddPathSlash( filepath, sizeof filepath );
+				CopyFileLoop( filepath );
+			}
+		} else if( ft == FileType_File ) {
+			
+			CopyFileSingle( filepath );
+		}
+	}
+	CloseHandle(dir);
+}
+*/
+/*
+//-------------------------------------------------------------------------------------------------
+DoLocalCopy( const String:source[], const String:dest[] ) {
+	decl String:srcpath[512];
+	decl String:destpath[512];
+	if( !FormatLocalPath( srcpath, sizeof srcpath, source ) ) {
+		PrintToServer( "[ST] error: invalid source (bad path)" );
+		return;
+	}
+	if( !FormatLocalPath( destpath, sizeof destpath, dest ) ) {
+		PrintToServer( "[ST] error: invalid dest (bad path)" );
+		return;
+	}
+	
+	if( !FileDirExists( srcpath ) ) {
+		PrintToServer( "[ST] error: invalid source (directory doesnt exist)" );
+		return;
+	}
+	if( !FileDirExists( destpath ) ) {
+		PrintToServer( "[ST] error: invalid dest (directory doesnt exist)" );
+		return;
+	}
+
+	new bool:multi = IsMultiTransfer(source);
+	if( multi ){
+		AddPathSlash( destpath, sizeof destpath );
+	}
+	
+
+	StripFileName( path_source, sizeof path_source, srcpath );
+	StripFileName( path_dest, sizeof path_dest, destpath );
+	StripFilePath( op_pattern, sizeof(op_pattern), srcpath );
+	LoadPatternRegex();
+	 
+	operation_files_transferred = 0;
+	EraseFilePack(); 
+
+	if( srcpath[strlen(srcpath)-1] == '/' ) {
+		PrintToServer( "[ST] error: Invalid source; for directory transfers use -r path/*" );
+		return;
+	}
+
+	if( multi ) {
+		PrintToServer( "[ST] copying files..." );
+		CopyFileLoop( "" );
+		PostUpload();
+	} else {
+		
+		if( PathIsDirectory(destpath) ) {
+			CopyFileSingle( op_pattern );
+			PostUpload();
+		} else {
+			decl String:filedest[256];
+			StripFilePath( filedest, sizeof filedest, destpath );
+			 
+			CopyFileSingle( op_pattern, filedest );
+			PostUpload();
+		
+		}
+	}
+	PrintToServer( "[ST] %d files copied", operation_files_transferred );
+}
+*/
+/*
+//-------------------------------------------------------------------------------------------------
+CopyFiles( const String:source[], const String:dest[], bool:directory_recursive ) {
+	new FileDomain:sourcedomain, FileDomain:destdomain;
+	
+	op_directory_recursive = directory_recursive; // set op option
+	sourcedomain = GetFileDomain( source );
+	destdomain = GetFileDomain( dest );
+
+	
+	if( destdomain == DOMAIN_ERROR || destdomain == DOMAIN_WEB ) {
+		PrintToServer( "[ST] invalid destination path" );
+		return;
+	}
+
+	if( sourcedomain == DOMAIN_FTP ) {
+		if( destdomain == DOMAIN_FTP ) {
+			
+			PrintToServer( "[ST] FTP->FTP transfers are not supported." );
+			return;
+		} else if( destdomain == DOMAIN_LOCAL ) {
+			
+			StartFTPDownload( source, dest );
+			return;
+		} else if( destdomain == DOMAIN_HTTP ) {
+			PrintToServer( "[ST] http mode is read only." );
+			return;
+		}
+	} else if( sourcedomain == DOMAIN_ERROR ) {
+		PrintToServer( "[ST] bad source path" );
+		return;
+	} else if( sourcedomain == DOMAIN_LOCAL ) {
+		if( destdomain == DOMAIN_FTP ) {
+			StartFTPUpload( source, dest );
+		} else if( destdomain == DOMAIN_HTTP ) {
+			PrintToServer( "[ST] http mode is read only" );
+			return;
+		} else if( destdomain == DOMAIN_LOCAL ) {
+			DoLocalCopy( source, dest );
+		}
+	} else if( sourcedomain == DOMAIN_HTTP ) {
+		if( destdomain == DOMAIN_HTTP ) {
+			PrintToServer( "[ST] HTTP->HTTP is not supported." );
+			return;
+		} else if( destdomain == DOMAIN_FTP ) {
+			PrintToServer( "[ST] HTTP->FTP is not supported. ");
+			return;
+		} else if( destdomain == DOMAIN_LOCAL ) {
+			StartHTTPDownload( source, dest );
+			return;
+		}
+		
+	} else if( sourcedomain == DOMAIN_WEB ) {
+		if( destdomain != DOMAIN_LOCAL ) {
+			PrintToServer( "[ST] invalid destination" );
+			return;
+		}
+
+		StartWebDownload( source, dest );
+	}
+}
+*/
+
+/*
+//-------------------------------------------------------------------------------------------------
+bool:IsMultiTransfer( const String:path[] ) {
+	decl String:file[256];
+	StripFilePath( file, sizeof(file), path );
+	return( FindCharInString( file, '*' ) >= 0 );
+}
+*/
+
+/*
+//-------------------------------------------------------------------------------------------------
+bool:TryCopyDisabledPlugin( const String:path[] ) {
+	// only pass a valid plugin path
+	
+	decl String:plugins[128];
+	BuildPath( Path_SM, plugins, sizeof plugins, "plugins/" );
+	new filestart = strlen(plugins);
+	decl String:dpath[128];
+	FormatEx( dpath, sizeof dpath, "%sdisabled/%s", plugins, path[filestart] );
+	
+	if( FileExists( path ) ) return true;
+	
+	PrimeFileTarget( path );
+	if( FileExists( dpath ) ) {
+		RenameFile( path, dpath );
+		return true;
+	}
+	return false;
+}*/
+/*
+//-------------------------------------------------------------------------------------------------
+DisablePlugin( const String:path[] ) {
+	decl String:plugins[128];
+	BuildPath( Path_SM, plugins, sizeof plugins, "plugins/" );
+	new filestart = strlen(plugins);
+	decl String:dpath[128];
+	FormatEx( dpath, sizeof dpath, "%sdisabled/%s", plugins, path[filestart] );
+	if( !FileExists( path ) ) return;
+	PrimeFileTarget( dpath );
+	RenameFile( dpath, path );
+}*/
+
+/*
+//-------------------------------------------------------------------------------------------------
+bool:FormatFTPUrl( String:output[], maxlen, const String:file[] ) {
+	if( strncmp( file, "ftp/", 4 ) != 0 ) return false;
+	Format( output, maxlen, "%s%s", ftp_url, file[4] );
+	return true;
+}
+*/
+/*
+//-------------------------------------------------------------------------------------------------
+bool:FormatHTTPUrl( String:output[], maxlen, const String:file[] ) {
+	if( strncmp( file, "http/", 5 ) != 0 ) return false;
+	Format( output, maxlen, "%s%s", http_url, file[5] );
+	return true;
+}
+*/
+/*
+//-------------------------------------------------------------------------------------------------
+bool:FormatWebUrl( String:output[], maxlen, const String:file[] ) {
+	if( strncmp( file, "web/", 4 ) != 0 ) return false;
+	Format( output, maxlen, "%s%s", "http://", file[4] );
+	return true;
+}
+
+//-------------------------------------------------------------------------------------------------
+bool:FormatHTTPListingUrl( String:output[], maxlen, const String:file[] ) {
+	if( strncmp( file, "http/", 5 ) != 0 ) return false;
+	Format( output, maxlen, "%s%s?path=/%s", http_url, http_listing_file, file[5] );
+	return true;
+}
+*/
+
+/*
+//-------------------------------------------------------------------------------------------------
+ProcessDownloadedFiles() {
+	
+	ResetPack( op_filepack );
+	for( new i = 0; i < operation_files_transferred; i++ ) {
+		decl String:tempfile[256];
+		decl String:file[256];
+		decl String:final[256];
+		ReadPackString( op_filepack, tempfile, sizeof(tempfile) );
+		ReadPackString( op_filepack, file, sizeof(file) );
+		decl String:ext[32];
+		GetFileExt( ext, sizeof ext, file );
+		
+		if( TrieSet( pp_trie, ext ) ) {
+			
+			PreprocessFile( tempfile, sizeof(tempfile) );
+		}
+		Format( final, sizeof(final), "%s%s", path_dest, file );
+		 
+		if( !PrimeFileTarget( final ) ) {
+			 
+			OperationError( "Couldn't write to file: %s", file );
+			DeleteFile( tempfile );
+		} else {
+			
+			 
+			if( !RenameFile( final, tempfile ) ) {
+				OperationError( "Couldn't write to file: %s", file );
+			}
+		}
+	}
+
+	CloseHandle( op_filepack );
+	op_filepack = INVALID_HANDLE;
+}*/
+
+/*
+//-------------------------------------------------------------------------------------------------
+CompleteOperation( ) {
+	
+	CloseHandle( op_stack );
+	op_stack = INVALID_HANDLE;
+	 
+	
+	CloseHandle( op_logfile );
+	op_logfile = INVALID_HANDLE;
+	LogToFile( logfile, "operation ended: %s", op_name );
+	PrintToServer( "[ST] operation completed" );
+	op_state = STATE_COMPLETED;
+	
+	if( StrEqual( op_name, "Server Sync" ) ) {
+		if( initial_sync ) {
+			initial_sync = false;
+			op_state = STATE_READY;
+		}
+		Sync_Cleanup();
+	}
+	
+	SleepServer();
+}*/
+
+
+//-------------------------------------------------------------------------------------------------
+bool:FileIsNormalPlugin( const String:path[] ) {
+	// normal plugin is a .smx file located in sm/plugins and not
+	// sm/plugins/disabled or sm/plugins/optional
+	decl String:plugins[128];
+	BuildPath( Path_SM, plugins, sizeof plugins, "plugins/" );
+	ReplaceString( plugins, sizeof plugins, "\\", "/" );
+	
+	new plen = strlen(plugins);
+	if( strncmp( plugins, path, plen, false ) == 0 ) {
+		
+		// check folder that it's in
+		if( strncmp( path[plen], "disabled/", 9, false ) == 0 ) return false;
+		if( strncmp( path[plen], "optional/", 9, false ) == 0 ) return false;
+		
+		new ext = FindCharInString( path, '.', true );
+		if( ext == -1 ) return false; // no extension
+		if( StrEqual( path[ext], ".smx", false ) ) return true;
+	}
+	return false;
+}
+
+
+//-------------------------------------------------------------------------------------------------
+bool:ReadyForNewOperation() {
+	if( op_state == STATE_READY ) return true;
+	
+	if( op_state == STATE_BUSY ) {
+		PrintToServer( "[ST] An operation is already in progress!" );
+		return false;
+	} else if( op_state == STATE_COMPLETED ) {
+		PrintToServer( "[ST] An operation result is waiting; use st_status to read it, and then st_reset." );
+		return false;
+	}
+	return false;
+}
