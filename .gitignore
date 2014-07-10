@@ -215,3 +215,8 @@ pip-log.txt
 .mr.developer.cfg
 
 stc/autoexec.cfg
+updater/docs/
+updater/plugins/
+updater/scripting
+package/
+*.smx

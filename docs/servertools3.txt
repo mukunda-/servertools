@@ -1,0 +1,722 @@
+                                       ServerTools User Manual 
+                                    -----------------------------
+                                          (C) 2014 mukunda      
+
+---------------------------------------------------------------------------------------------------
+											
+                                  THIS PAGE INTENTIONALLY LEFT BLANK
+			
+			
+
+---------------------------------------------------------------------------------------------------
+Plugin Version As Of Writing: 3.0.1					6:28 PM 5/17/2014
+---------------------------------------------------------------------------------------------------
+Reading the manual
+
+	Please view with tabstop:8
+	
+	Whenever [terms] are mentioned, they are a reference to a page index which can be 
+	found with the corresponding hashtag. ie [filepaths] refers to #filepaths.
+
+---------------------------------------------------------------------------------------------------
+ServerTools File Paths								#filepaths
+
+	ServerTools commands use a special easily formatted paths system
+	
+	sm/...		path relative to sourcemod folder
+	cfg/...		path relative to game cfg folder (ie tf/cfg/...)
+	game/...	path relative to game root directory (ie tf/...)
+	pl/...		path relative to sourcemod plugins folder, .smx is appended
+	tr/...		path relative to sourcemod translations folder, .phrases.txt is appended
+	sc/...		path relative to sourcemod configs folder
+
+	Paths support wildcard characters for multiple file transfers
+
+Examples
+	sm/plugins		plugins folder
+	pl/test			points to sm/plugins/test.smx
+	tr/test			points to sm/translations/test.phrases.txt
+	cfg/server.cfg		path to your server.cfg
+	sc/sourceirc.cfg	points to sm/configs/sourceirc.cfg
+
+---------------------------------------------------------------------------------------------------
+ServerTools "Operations"							#operations
+	
+	Certain commands will start "operations" which complete themselves in threads.
+	Commands that start operations will print [ST] OPCREATE:# where # is a unique ID for the
+	operation.
+	Use "st_status <id>" to check the status of the operation, and to also get the 
+	response when the operation is finished. The response will remain valid for 10 minutes
+	after the operation completes.
+	
+	See more on st_status [status]
+	
+	WARNING: If the map changes, an operation may be interrupted if the plugin is
+	reloaded. 
+	
+	Prevent this by setting servertools' lifetime to "global" in plugin_settings.cfg:
+
+	"Plugins"
+	{
+		"*"
+		{
+			"pause"			"no"
+			"lifetime"		"mapsync" 
+		}
+		"servertools"
+		{ 
+			"lifetime"		"global"
+		}
+	}
+---------------------------------------------------------------------------------------------------
+ServerTools Configuration							#config
+
+	ServerTools uses two configuration files.
+		
+	The first config is located at sourcemod/configs/servertools.cfg
+	
+	Example Configuration File:
+	
+"servertools"
+{ 
+	"remote"
+	{
+		// remote folder information (HTTP)
+		"url"		"http://mycommunity.com/sync/"
+		"key"		"mysecretcode" 
+		"files"		"files"
+		"files_nosync"	"files_nosync"
+	}
+	"syncpaths"
+	{
+		"cfg"			"r	configs"
+		"sc"			"r	configs"
+		"sm/plugins"		"apr	plugins"
+		"sm/translations"	"ar	plugins"
+		"game"			"-	toplevel"
+	}
+	 
+	"textfiles"	"cfg ini txt"	// treat these extensions as text files
+}
+	
+	The "remote" section describes where the server should retrieve files from.
+	This is used for Get and Sync operations. [get] [sync]
+	
+		"url" is the path to your remote directory.
+		"key" is a passcode that will be passed to the remote when
+		retrieving data.
+		"files" is the name of the subdirectory in the remote folder
+		that contains your main server structure.
+		"files_nosync" is an alternate subdirectory of that contains
+		files that are not automatically updated with ServerTools Sync. [sync]
+	
+	The "syncpaths" section lists the paths that will be updated by ServerTools Sync.
+	
+		List paths that should be checked for updates here. Each KEY contains
+		a path to a directory, and the VALUE contains two things, the sync
+		flags and a name for the path.
+		
+		Format: "<path>" "<flags> <name>"
+		
+		Specify "-" if no flags are used.
+		
+		See [sync] for more information.
+		
+		The "r" flag:
+			Recursive; the path and all subdirectories will be updated.
+			
+		The "a" flag:
+			All; all files in the directory will be checked for updates.
+			Normally, only files with SYNC tags inside of the file, or 
+			SYNC files associated with them will be checked for updates.
+			This flag is useful when updating a folder with lots of files
+			that should be kept up to date (such as your plugins folder.)
+			
+		The "p" flag:
+			Plugins; all this does is make the scanner skip the "disabled"
+			folder, to not update disabled plugins.
+
+	"textfiles" selects which file types will be treated as text. Text files can be
+	searched by the Sync function for update tags. Text files are also preprocessed
+	when they are retrieved from the remote. [pp]
+	
+	The other config is located at sourcemod/configs/servertools_id.cfg, and it
+	specifies the ID and groups for the server.
+	
+"servertools_id"
+{
+	"id"		"test"
+	"Groups"	"cs csgo testing"
+}
+	
+	The "id" field sets the identifier for this server, which is passed to the remote
+	server and used for targetting operations.
+	
+	The "Groups" field sets the groups that this server is associated with. Multiple
+	servers can share the same group(s). Capitalize "Groups" to work around a conflict
+	with the admin groups file. All servers are also automatically placed in group "all".
+
+===================================================================================================
+Full Command Listing								#cmdlist
+===================================================================================================
+
+	Command			Description			Page
+	
+	st_id			Get Server ID and Groups	[id]
+	st_get			Get from remote			[stget]
+	st_remove		Remove file			[remove]
+	st_sync			Perform Sync			[stsync]
+	st_status		Read operation status		[status]
+
+---------------------------------------------------------------------------------------------------
+st_id										#id
+
+Description:
+	
+	Gets Server ID and groups. This function also reloads servertools_id.cfg. [config]
+
+Flags:
+	None
+
+Example:
+	>>> st_id
+	<<< [ST] id = "cstest"
+	<<< [ST] groups = "cs test lan"
+
+---------------------------------------------------------------------------------------------------
+st_status									#status
+
+Description:
+	Retrieve Operation Status [operations]
+
+	st_status can reply with 3 states:
+	
+	"[ST] STATUS: NOTFOUND"
+	
+	This means that an operation wasn't found OR the result has expired. Results are deleted
+	from memory 10 minutes after the operation completes.
+	
+	"[ST] STATUS: BUSY"
+	
+	This means that the operation requested is still in progress.
+	
+	"[ST] STATUS: COMPLETE"
+	
+	This means that the operation has completed. The output of the operation will also 
+	be printed.
+	
+	The ServerTools Console automatically polls the operation and prints the result. [console]
+
+---------------------------------------------------------------------------------------------------
+st_get	<target> [remote] [-s]							#stget
+
+Description:
+	Get a file from the remote server.
+	
+	"target" is a path to a file to Get. If "remote" is omitted, then remote will
+	be treated the same as the target.
+	
+	"remote" may be different, and will fetch a differently named file from the server.
+	This is so that you can remap files on the remote side, such as using a php file for
+	your server config.
+	
+	When using Get, both the "files" and "files_nosync" [config] folders are searched
+	for the desired file. Get searches "files" for the target before trying "files_nosync".
+	
+Examples:
+	
+	st_get pl/test
+	
+		Download sourcemod/plugins/test.smx and save it in the plugins folder.
+		
+	st_get cfg/server.cfg cfg/server.php
+		
+		Download cfg/server.php and save it as cfg/server.cfg.
+		
+	st_get cfg/server.cfg cfg/server.php -s
+		
+		Download cfg/server.php, save it as cfg/server.cfg, and create a
+		file called "cfg/server.cfg.sync" which will contain the remote path. [sync]
+		
+Using Packages
+	
+	Get also supports a package system, so you can Get files in batches.
+	
+	Prefix the target with "pkg/" to get a package.
+	
+	For example: st_get pkg/test will Get the "test" package, which is located in the
+	remote folder under "packages/test.package"
+
+---------------------------------------------------------------------------------------------------
+st_sync	<target> [-aprf]							#stsync
+	
+Description:
+	Performs a Server Sync. [sync]
+	
+	<target> may be:
+	
+		"all"
+			Perform a normal server-sync, updating all paths specified in the config.
+		<syncpath name>
+			Perform a sync on a sync-path. Sync paths are specified in the config and
+			may list multiple directories.
+		<directory path>
+			Perform a sync on a directory. The directory does not have to have a sync
+			path associated with it. The files in the directory will be scanned for
+			updates.
+		<file path>
+			Perform a sync on a single file.
+		
+	Flags are prefixed with a dash followed by one or more flag letters. When doing a sync
+	with a designated sync-path, the flags specified here will override the options specified
+	in the config. e.g. if the sync-path has flags "a" and you specify the option "-r", then
+	the sync be performed with both flags "a" and "r". See [sync] for flag details.
+	
+	Flags are optional and do not have to come after the target argument.
+	
+Examples:
+	
+st_sync all			// perform a normal server-sync
+st_sync configs			// perform a sync on the syncpath(s) named "configs"
+st_sync cfg			// perform a sync in the "/cfg" folder
+st_sync sm/configs		// perform a sync in the sourcemod config folder
+st_sync cfg/server.cfg		// perform a sync on a single file
+st_sync cfg/server.cfg -f	// perform a force-sync on a single file
+st_sync -a cfg			// update all cfg files, even ones without sync tags
+
+	See [sync] for more information.
+	
+===================================================================================================
+Server Specific Configuration (Preprocessing)					#pp
+	
+	The ServerTools preprocessor can be used to add server-specific text in
+	certain files.
+	
+	Currently only simple #if commands are supported:
+
+	#if "target" 		- include enclosed text if server is targeted.
+	#ifnot "target"		- include enclosed text if server is not targeted.
+	#endif			- close #if statement
+	
+	See [targets] to see how you can format the target.
+	
+	An example config file, which gives one server unlimited money:
+
+mp_timelimit 0
+mp_roundtime 60
+...etc....
+
+#if "my16kserver"
+mp_afterroundmoney 16000
+#endif
+
+	Another example below: a serverhop configuration. With the preprocessor the file
+	can be easily copied to all of the servers in a batch operation, but each server will not
+	include itself in its own serverhop configuration.
+
+"Servers"
+
+{
+
+#ifnot "stock"
+	"Reflex Stock Rotation"
+	{
+
+		"address"	"74.91.120.34"
+	}
+#endif
+#ifnot "turbine"
+	"Reflex Turbine"
+	{
+		"address"	"74.201.57.124"
+	}
+#endif
+#ifnot "2fort"
+	"Reflex 2Fort"
+	{
+		"address"	"74.91.114.113"
+	}
+#endif
+#ifnot "10x"
+	"Reflex 10x Mayhem"
+	{
+		"address"	"74.201.57.57"
+	}
+#endif
+}
+	
+	Need more control? ServerTools also passes the ID and groups to the remote server 
+	as GET parameters when asking for files.
+	
+	"?id=<serverid>&groups=<groups>" is appended to the URL, so you can use PHP or other
+	methods to customize the file being requested.
+	
+	Groups are separated by slashes; "cs csgo casual" will become "groups=cs/csgo/casual"
+
+===================================================================================================
+ ServerTools Console 						 		#console
+===================================================================================================
+
+	The ServerTools Console provides an interface to control ServerTools or run other
+	commands in a batch on your game servers.
+	
+	To begin, open autoexec.cfg (located in the same folder as the .exe).
+	
+	For each server you want to manage, use the "addserv" command to add it to the system
+	see [.addserv]
+	
+	autoexec.cfg will be executed when the console is started, and when properly configured 
+	you should see your server identifiers in the right panel.
+	
+	To select servers you want to operate on, use the "sel" command.
+	
+	From here, any server command you execute will be executed on all selected servers, 
+	and the system will wait until all servers have completed their operation before you 
+	can enter another command.
+  
+---------------------------------------------------------------------------------------------------
+Command Listing									#.list
+	
+	Command		Description			Page
+	addserv		Add server for management	[.addserv]
+	sel		Select server(s)		[.sel]
+	asel		Add to selection		[.asel]
+	dsel		Remove from selection		[.dsel]
+	list		List servers			[.list]
+	r		Execute rcon command		[.rcon]
+	new		Create new file			[.new]
+	delete		Delete file			[.delete]
+	dir		View directory contents		[.dir]
+	copy		Copy files			[.copy]
+	rename		Rename file			[.rename]
+	mkdir		Create directory		[.mkdir] 
+	edit		Edit file			[.edit]
+	cfgfind		Configuration search		[.cfgfind]
+	cfgedit		Edit server configuration	[.cfgedit]
+	view		View file contents		[.view]
+	sync		Force server sync		[.sync]
+	exec		Execute script			[.exec] 
+	exit		End Session			[.exit]
+	
+---------------------------------------------------------------------------------------------------
+Using Commands in ServerTools Console						#.commands
+	
+	Most of the ServerTools commands are accessible by commands in the ServerTools Console 
+	without using an rcon command directly. 
+	
+	The advantage of using these commands over normal rcon execution is that ServerTools
+	Console will automatically handle the reading of the ServerTools status for threaded
+	commands and reset the system before allowing you to continue.
+	
+	See [operations] for more info.
+	
+---------------------------------------------------------------------------------------------------
+addserv <address> <password>							#.addserv
+
+	Adds a server to the system.
+	 
+	address: Game server address, append ":portnumber" if necessary (default 27015)
+	 
+	password: Password to access the server's remote console. (rcon_password)
+	
+Examples:
+	addserv csserverwhereyoubuyadmin.game.nfoservers.com      paspfOAFPhog
+	addserv jailserverwithhats.game.nfoservers.com            paspfOAFPhog
+	addserv tf2serverwithvideoads.game.nfoservers.com         aaFJpOACWXo
+	
+	ServerTools must be installed on each server for commands to be executed. Each server
+	will be asked for their IDs and groups when they are added.
+	
+---------------------------------------------------------------------------------------------------
+sel <target>									#.sel
+
+	Selects servers matching a target.
+	
+	See [targets] for formatting help.
+	
+	Without a parameter, the current selection will be shown.
+	
+Examples:
+	sel	"tf2 cs"	// select all servers in group "tf2" or "cs"
+				
+	sel	"tf2+casual"	// select servers that are in both groups "tf2" and "casual"
+	sel	"all -server1"	// select all servers except for id "server1"
+	sel			// do nothing and print selection
+	
+---------------------------------------------------------------------------------------------------
+r <command>									#.rcon
+
+	Execute a server command on the selected servers.
+	
+	Aliases: rcon
+	
+Example:
+	r say hi
+	
+	(all selected servers will have their console say "hi")
+
+---------------------------------------------------------------------------------------------------
+new <filename>									#.new
+
+	Creates an empty file
+	
+	see st_new [new] 
+	
+---------------------------------------------------------------------------------------------------
+delete <filename>								#.delete
+	
+	Delete a file
+	
+	see st_delete [delete]
+	
+---------------------------------------------------------------------------------------------------
+dir <path>									#.dir
+
+	View directory contents
+	
+	see st_dir [dir]
+
+---------------------------------------------------------------------------------------------------
+copy [-rm] <source> <dest>							#.copy
+
+	Copies a file
+	
+	see st_copy [copy] 
+	
+---------------------------------------------------------------------------------------------------
+rename <source> <dest>								#.rename
+	
+	Rename a file
+		
+	see st_rename [rename]
+	
+---------------------------------------------------------------------------------------------------
+mkdir <path>									#.mkdir
+	
+	Create directory
+	
+	see st_mkdir [mkdir]
+	  
+---------------------------------------------------------------------------------------------------
+edit [-i] <file> <line> <text>							#.edit
+	
+	Edit a text file.
+	
+	see st_edit [edit]
+	
+---------------------------------------------------------------------------------------------------
+cfgfind [-pa] <term>								#.cfgfind
+	Search configuration files
+	
+	see st_cfgfind [cfgfind]
+
+---------------------------------------------------------------------------------------------------
+cfgedit [-ar] <file> <command>							#.cfgedit
+	Edit configuration file
+	
+	see st_cfgedit [cfgedit]
+
+---------------------------------------------------------------------------------------------------
+view -xxx <filename>								#.view
+	View file contents
+	
+	see st_view [view]
+	
+---------------------------------------------------------------------------------------------------
+sync										#.sync
+
+	Force start server sync
+	
+	see [sync]
+	
+---------------------------------------------------------------------------------------------------
+exec <script>									#.exec
+	Execute script file relative to the program directory.
+	
+	Script files are simply text files that contain commands to be executed in a sequence.
+	
+	".cfg" is the default file extension if omitted.
+	
+	"//" starts a comment in script files.
+	
+Example:
+	exec autoexec		// execute autoexec.cfg again (this is done at startup)
+	exec myscript1.txt	// execute a custom script 
+
+---------------------------------------------------------------------------------------------------
+exit										#.exit
+
+	Closes ServerTools Console
+	
+	Aliases: Quit
+
+===================================================================================================
+ ServerTools Synchronization Function				 		#sync
+===================================================================================================
+
+	ServerTools has a feature to synchronize all of your servers' files with one source. The
+	sync feature will run automatically if enabled when the plugin is loaded and if 20 hours
+	have passed since the last sync. It can also be triggered by the command st_sync.
+
+	Sync configuration block (in servertools.txt)
+
+	"sync"
+	{
+		"url"		"http://test.example.com/sync/"
+		"manifest"	"manifest.php"
+		"listing"	"sync_list.php"	
+		"checkplugins"	"1"
+		"binaries"	"smx dll so mdl phy vtx vvd"
+	}
+	
+	"url" points to the base directory of a remote location where files will be synchronized
+	from.
+	
+	"manifest" points to a file located in that base directory that lists the files used
+	by your servers. [manifest]
+	
+	"listing" points to the hashing/listing script that is packaged with servertools. This
+	needs to be uploaded to your sync location.
+	
+	"checkplugins" if set to 1 will cause any plugins that aren't mentioned in the manifest
+	to be moved to the disabled folder, otherwise they are ignored.
+	
+	"binaries" is a list of file types that will be treated as static files; if a file is one
+	of these types then it will be hashed on the client side to compare with the server hash. 
+	Normally, if the hash is not known, it will always force-update the file.
+	
+	The ServerTools Sync function is as follows:
+	
+	  - request the manifest from the sync directory
+	  - scan the manifest and build a list of files that are used by the server
+	  - ask the sync server for hashes of each file
+	  - check the hashes of each file on the server with the hashes received
+	    and build a list of out-of-date or missing files
+	  - request each file needed from sync server and overwrite old files
+	  - if "checkplugins" is set, remove any plugins that weren't in the manifest
+	    to the disabled folder
+	  - after completion, servertools issues the command "exec post-sync.cfg"
+	
+---------------------------------------------------------------------------------------------------
+Sync Manifest									#manifest
+	
+	The sync manifest is a KeyValues struct that contains a list of packages for your
+	servers.
+	
+	Example:
+	
+"servertools_manifest"
+{
+	"packages"
+	{
+		"smac" // SourceMod Anti-Cheat
+		{
+			"target"	"all"
+			"files"
+			{
+				"pl/smac/smac"			""
+				"pl/smac/smac_aimbot"		""
+				"pl/smac/smac_autotrigger"	""
+				"pl/smac/smac_client"		""
+				"pl/smac/smac_commands"		""
+				"pl/smac/smac_cvars"		""
+				"pl/smac/smac_eyetest"		""
+				"tr/smac.phrases"		""
+				"cfg/sourcemod/smac.cfg"	""
+			}
+		}
+	}
+}
+	
+	"packages" starts the list of packages that your servers will iterate over when building
+	a file list. In the example there's only one package: "smac"
+	
+	"target" controls which servers will use the package. See [targets]
+	
+	"files" contains the file list that will be controlled by the package. Each file found
+	here will cause that file to be checked and updated if missing or different from the
+	file at the remote location.
+	
+	The value assigned to each "files" key is the remote location parameter. If left empty,
+	the remote path will be copied from the local path. Examples:
+	
+	(see [filepaths] to understand how file paths are translated to real paths)
+	
+		"cfg/test.cfg" ""
+		
+		  Server copies file "cfg/test.cfg" from sync folder and saves as 
+		  cfg/test.cfg.
+					
+		"cfg/test.cfg" "cfg/test-csgo.cfg"
+		
+		  Server copies file "cfg/test-csgo.cfg" from sync folder and saves as 
+		  cfg/test.cfg.
+		
+		"cfg/test.cfg" "abc.php"
+		
+		  Server copies file "abc.php" from sync folder and saves as cfg/test.cfg.
+			
+	The value for files can also contain these special keywords:
+		
+		"?ignore"
+		
+		  The file will not be downloaded or updated. This keyword tells servertools
+		  to ignore the presence of a certain file in the plugins folder. After the sync
+		  is complete it will not disable this plugin if "checkplugins" is "1" and the 
+		  plugin is not on the manifest.
+		  
+		  Example: "pl/testplugin" "?ignore"
+		  
+		"?install"
+		
+		  The file will be downloaded only if it does not exist. 
+		  
+		  If it is a plugin, Servertools will look in the /disabled/ folder for the plugin
+		  before requesting it from the server. Servertools will not keep this file 
+		  synced with the server, and assumes it is managed by other means.
+		  
+		  Example: "pl/updater" "?install" // does not update, only installs once
+		          
+		  This keyword can be mixed with a normal remote path override.
+		  
+		  Example: "pl/test?install" will be flagged for install mode and the remote 
+		  location will be stripped to "pl/test"
+		  
+	Other package options:
+	
+	"disabled" - if set to "1" then this package will be ignored.
+		  
+---------------------------------------------------------------------------------------------------
+Server Targets										#targets
+
+	Server targets are a list of groups or IDs separated by spaces that create a selection 
+	of servers.
+	
+	The ID and groups of a server are listed in the servertools config. IDs are considered
+	groups that contain only the server with the ID.
+	
+	All servers are automatically included into the special group "all".
+	
+	Prefixing a target group with "-" will cause it to be excluded.
+	
+	A "+" is used to combine groups. Groups with "+" between them will only target servers
+	that are in all combined groups at once. These combinations can also be prefixed with 
+	"-" to exclude servers that are targeted.
+	
+	Target strings are processed from left to right--selecting or excluding each group.
+	
+	Example targets:
+	
+	  "test"	   servers that are in group "test"
+	  "all -tf2"	   servers that aren't in group "tf2"
+	  "all -2fort"	   all servers except for "2fort"
+	  "cs csgo"	   servers in either group "cs" or "csgo"
+	  "all -tf2 2fort" all servers that aren't in group tf2, but includes "2fort".
+	  "csgo+casual+ff" servers that are in all 3 groups "csgo", "casual" and "ff"
+	  "csgo+max -cmp"  servers that are in both groups "csgo" AND "max" BUT NOT "cmp".
+	  "csgo +casual tf2 +special" servers that are in both groups "csgo" and "casual"
+				      OR "tf2" and "special"
+	  "all -csgo+casual" all servers except ones that appear in both "csgo" and "casual"
+	  
+	
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

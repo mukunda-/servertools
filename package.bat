@@ -20,7 +20,7 @@ copy docs\servertools.txt package\ /Y
 copy docs\servertools.txt package\server\docs /Y
 copy plugin\servertools.smx package\server\plugins /Y
 copy plugin\servertools.sp package\server\scripting /Y
-copy web\sync_list.php package\sync /Y
+copy web\listing.php package\sync /Y
 copy stc\Release\autoexec_stock.cfg package\stc\win32\autoexec.cfg /Y
 copy stc\Release\stc.exe package\stc\win32 /Y
 copy stc\LICENSE_1_0.txt package\stc\win32 /Y
