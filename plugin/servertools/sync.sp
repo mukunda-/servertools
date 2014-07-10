@@ -153,6 +153,8 @@ StartSync( const String:target[], forceflags=0 ) {
 	// directory path
 	// file path
 	if( g_remote_url[0] == 0 ) return;
+
+	LoadIDConfig();
 	
 	new mode;
 	if( !SyncValidateTarget( target, mode ) ) {

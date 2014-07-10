@@ -1,6 +1,6 @@
 
 enum {
-//	GET_FORCE=1
+	GET_SYNC=1 //TODO
 };
 enum {
 	GETMODE_SINGLE=1,
@@ -37,7 +37,8 @@ public Action:Command_remove( args ) {
 //-------------------------------------------------------------------------------------------------
 public Action:Command_get( args ) {
 	if( args == 0 ) {
-		PrintToServer( "[ST] Usage: st_get <target> [remote]" );
+		PrintToServer( "[ST] Usage: st_get <target> [remote] [-s]" );
+		PrintToServer( "[ST]   -s : create sync file" );
 		return Plugin_Handled;
 	}
 	if( g_remote_url[0] == 0 ) {
@@ -54,12 +55,12 @@ public Action:Command_get( args ) {
 		decl String:arg[128];
 		GetCmdArg( 1+i, arg, sizeof arg );
 		if( arg[0] == '-' ) {
-			//if( arg[1] == 'f' ) {
-			//	flags |= GET_FORCE;
-			//} else {
-			PrintToServer( "[ST] st_get - Unknown option: \"%c\"", arg[1] );
-			return Plugin_Handled;
-			//}
+			if( arg[1] == 's' ) {
+				flags |= GET_SYNC;
+			} else {
+				PrintToServer( "[ST] st_get - Unknown option: \"%c\"", arg[1] );
+				return Plugin_Handled;
+			}
 		} else {
 			if( target[0] == 0 ){
 				strcopy( target, sizeof target, arg );
@@ -105,6 +106,9 @@ public Action:Command_get( args ) {
 
 //-------------------------------------------------------------------------------------------------
 DoGetPackage( const String:package[], flags ) {
+	
+	LoadIDConfig();
+
 	new Handle:op = CreateOperation( "Server Get", OnGetStart );
 	KvSetNum( op, "user/mode", GETMODE_PACKAGE );
 	KvSetString( op, "user/target", package );
@@ -115,6 +119,9 @@ DoGetPackage( const String:package[], flags ) {
 
 //-------------------------------------------------------------------------------------------------
 DoGet( const String:localfile[], const String:remotefile[], flags ) {
+
+	LoadIDConfig();
+
 	new Handle:op = CreateOperation( "Server Get", OnGetStart );
 	KvSetNum( op, "user/mode", GETMODE_SINGLE );
 	KvSetString( op, "user/target", localfile );
@@ -147,7 +154,7 @@ public OnGetStart( Handle:op ) {
 		decl String:url[512];
 		decl String:target[128];
 		KvGetString( op, "user/target", target, sizeof target );
-		FormatEx( url, sizeof url, "%spackages/%s?%s", g_remote_url, target, g_url_request_params );
+		FormatEx( url, sizeof url, "%spackages/%s.package?%s", g_remote_url, target, g_url_request_params );
 		RemoteTransfer( url, OnGetPackage, op );
 	}
 }

@@ -13,8 +13,11 @@
 
 #pragma semicolon 1
 
-#define PLUGIN_VERSION "3.0.0"
+#define PLUGIN_VERSION "3.0.1"
 
+// 3.0.1
+//   reload id on sync/get
+//   AND in st_id
 // 3.0.0 
 //   the new era
 //   gutted system
@@ -146,6 +149,7 @@ public OnConfigsExecuted() {
 
 //-------------------------------------------------------------------------------------------------
 public Action:Command_id( args ) {
+	LoadIDConfig();
 	PrintToServer( "[ST] id = \"%s\"", my_id );
 	PrintToServer( "[ST] groups = \"%s\"", my_groups );
 	return Plugin_Handled;
@@ -241,6 +245,10 @@ LoadMainConfig() {
 
 //-------------------------------------------------------------------------------------------------
 LoadIDConfig() {
+	my_id = "unknown";
+	my_groups = "all";
+	BuildURLRequestParam();
+
 	new Handle:kv = LoadKVConfig( "servertools_id", "servertools_id.cfg" );
 	if( kv == INVALID_HANDLE ) return;
 	 
@@ -260,9 +268,7 @@ LoadConfigs() {
 	g_remote_url[0] = 0; 
 	ClearTrie( g_text_extensions ); 
 	
-	my_id = "unknown";
-	my_groups = "all";
-	BuildURLRequestParam();
+	
 	
 	LoadMainConfig();
 	LoadIDConfig();
@@ -350,24 +356,7 @@ public Action:Command_status( args ) {
 	new id = StringToInt( arg );
 	
 	PrintOperationStatus( id );
-	/*
-	if( op_state == STATE_READY ) {
-		PrintToServer( "#000 STATUS READY" );
-	} else if( op_state == STATE_BUSY ) {
-		PrintToServer( "#001 STATUS BUSY" );
-	} else if( op_state == STATE_COMPLETED ) {
-		PrintToServer( "#002 STATUS COMPLETE" );
-		PrintOperationResult();
-
-		if( args > 0 ) {
-			decl String:arg[64];
-			GetCmdArg( 1, arg, sizeof(arg) );
-			if( StrEqual( arg, "RESET" ) ) {
-				Command_reset(args);
-			}
-		}
-	}
-*/
+	 
 	
 	return Plugin_Handled;
 }
