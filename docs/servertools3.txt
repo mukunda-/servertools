@@ -9,7 +9,7 @@
 			
 
 ---------------------------------------------------------------------------------------------------
-Plugin Version As Of Writing: 3.0.2					8:16 PM 7/10/2014
+Plugin Version As Of Writing: 3.0.2					9:45 PM 7/10/2014
 ---------------------------------------------------------------------------------------------------
 Reading the manual
 
@@ -17,6 +17,49 @@ Reading the manual
 	
 	Whenever [terms] are mentioned, they are a reference to a page index which can be 
 	found with the corresponding hashtag. ie [filepaths] refers to #filepaths.
+	
+---------------------------------------------------------------------------------------------------
+Installation									#installation
+	
+	Extract the server tools package to your computer. 
+	
+	The ServerTools package is in 3 parts:
+	
+		remote: the files for your Remote directory; the directory on your website that 
+		your game servers will access to get files.
+		
+		server: the files for your game server.
+		
+		stc: the ServerTools Console program.
+	
+	Create a folder on your website for your servers to access. Copy the files in remote/
+	into this folder. Do not copy setkey.php if you do not plan on using a key. Anyone
+	can set a key if you do not have a key set.
+	
+	To set a key, open a browser and visit:
+	
+		http://<yoursite>.com/<stfolder>/setkey.php?newkey=<KEY>
+	
+	To change your key:
+	
+		http://<yoursite>.com/<stfolder>/setkey.php?key=<OLDKEY>&newkey=<NEWKEY>
+		
+	You need to also set this key in your server config.
+	
+	Create a folder in your remote where your servers will update files from, and another
+	folder where you will get non-updated files from. You will specify the name of these 
+	folders in the configuration.
+	
+	The non-updated folder will usually contain plugins that update themselves, or files that
+	shouldn't ever change.
+	
+	Copy the contents of the "server" folder in your game server's sourcemod directory.
+	
+	Create the ServerTools configuration files in your sourcemod config folder. See [config]
+	there are also .example configs provided.
+	
+	Restart your server or type "sm plugins load servertools" into the console to load
+	ServerTools.
 
 ---------------------------------------------------------------------------------------------------
 ServerTools File Paths								#filepaths
@@ -110,6 +153,16 @@ ServerTools Configuration							#config
 		that contains your main server structure.
 		"files_nosync" is an alternate subdirectory of that contains
 		files that are not automatically updated with ServerTools Sync. [sync]
+		
+		For example, with this configuration, files will be downloaded from:
+		
+			http://mycommunity.com/sync/files/...
+			
+		and for Get operations [get], this address will also be checked for files:
+		
+			http://mycommunity.com/sync/files_nosync/...
+			
+		but only if the file is not found in the "files" path first.
 	
 	The "syncpaths" section lists the paths that will be updated by ServerTools Sync.
 	
@@ -152,7 +205,7 @@ Full Command Listing								#cmdlist
 	Command			Description			Page
 	
 	st_id			Get Server ID and Groups	[id]
-	st_get			Get from remote			[stget]
+	st_get			Get from remote			[get]
 	st_remove		Remove file			[remove]
 	st_sync			Perform Sync			[stsync]
 	st_status		Read operation status		[status]
@@ -197,7 +250,7 @@ Description:
 	The ServerTools Console automatically polls the operation and prints the result. [console]
 
 ---------------------------------------------------------------------------------------------------
-st_get	<target> [remote]							#stget
+st_get	<target> [remote]							#get
 
 Description:
 	Get a file from the remote server.
@@ -221,6 +274,14 @@ Examples:
 	st_get pl/test
 	
 		Download sourcemod/plugins/test.smx and save it in the plugins folder.
+		
+		Actual URL used is 
+			<config URL path>/<config "files" folder>/sourcemod/plugins/test.smx
+			
+		and if that isn't found then:
+			<config URL path>/<config "files_nosync">/sourcemod/plugins/test.smx
+			
+		and if that isn't found then an error is printed.
 		
 	st_get cfg/server.cfg server.php
 		
@@ -537,9 +598,9 @@ addserv <address> <password>							#.addserv
 	password: Password to access the server's remote console. (rcon_password)
 	
 Examples:
-	addserv csserverwhereyoubuyadmin.game.nfoservers.com      paspfOAFPhog
-	addserv jailserverwithhats.game.nfoservers.com            paspfOAFPhog
-	addserv tf2serverwithvideoads.game.nfoservers.com         aaFJpOACWXo
+	addserv csserverwhereyoubuyadmin.mygameservers.com        paspfOAFPhog
+	addserv jailserverwithhats.mygameservers.com              paspfOAFPhog
+	addserv tf2serverwithvideoads.mygameservers.com           aaFJpOACWXo
 	
 	ServerTools must be installed on each server for commands to be executed. Each server
 	will be asked for their IDs and groups when they are added.
