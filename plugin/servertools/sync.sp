@@ -218,7 +218,7 @@ bool:ScanFileForSync( const String:file[], String:syncpath[], maxlen, bool:text 
 			
 			// found sync line
 			strcopy( syncpath, maxlen, line[index+11] );
-			if( !TranslateRemotePath( file, syncpath, sizeof syncpath ) ) {
+			if( !TranslateRemotePath( file, syncpath, maxlen ) ) {
 				LogToFile( g_logfile, "bad [ST:SYNC] remote path in file \"%s\"", file );
 			}
 			 
@@ -236,7 +236,7 @@ bool:ScanFileForSync( const String:file[], String:syncpath[], maxlen, bool:text 
 		f = OpenFile( file2, "r" );
 		if( ReadFileLine( f, line, sizeof line ) ) {
 			CloseHandle(f);
-			if( !TranslateRemotePath( file, syncpath, sizeof syncpath ) {
+			if( !TranslateRemotePath( file, syncpath, maxlen ) ) {
 				LogToFile( g_logfile, "bad path in syncfile \"%s\"", file2 );
 				return false;
 			}

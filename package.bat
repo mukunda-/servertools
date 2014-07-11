@@ -5,6 +5,7 @@ mkdir updater\docs
 
 mkdir package
 mkdir package\server
+mkdir package\server\configs
 mkdir package\server\plugins
 mkdir package\server\docs
 mkdir package\server\scripting
@@ -20,6 +21,8 @@ copy docs\servertools.txt package\ /Y
 copy docs\servertools.txt package\server\docs /Y
 copy plugin\servertools.smx package\server\plugins /Y
 copy plugin\servertools.sp package\server\scripting /Y
+copy servertools.cfg.example package\server\configs /Y
+copy servertools_id.cfg.example package\server\configs /Y
 copy web\listing.php package\remote /Y
 copy stc\Release\autoexec_stock.cfg package\stc\win32\autoexec.cfg /Y
 copy stc\Release\stc.exe package\stc\win32 /Y

@@ -1,0 +1,24 @@
+"servertools"
+{ 
+	"remote"
+	{
+		// remote folder information (HTTP)
+		"url"		"http://yourwebsite.com/sync/"
+		"key"		"password" 
+		"files"		"files"
+		"files_nosync"	"files_nosync"
+	}
+	"syncpaths"
+	{
+		// the sync operation will search these paths for files to sync
+		// text files with [ST:SYNC] tags or any files with a .sync file
+		// will be auto updated with the remote version
+		"cfg"		"r	configs"
+		"sc"		"r	configs"
+		"sm/plugins"	"apr	plugins"
+		"sm/translations"	"ar	plugins"
+		"game"		"-	toplevel"
+	}
+	 
+	"textfiles"	"cfg ini txt"	// treat these extensions as text files
+}

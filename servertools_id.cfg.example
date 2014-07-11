@@ -1,0 +1,8 @@
+"servertools_id"
+{
+	// identifier of server, should be unique to this server.
+	"id"	"myserver1"
+
+	// groups that this server is in, separate with space.
+	"Groups"	"testing custom1"
+}

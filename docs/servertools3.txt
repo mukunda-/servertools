@@ -125,7 +125,7 @@ ServerTools Configuration							#config
 		
 		
 
-	"textfiles" selects which file types will be treated as text. Text files can be
+	"textfiles" selects which file types will be treated as TEXT. Text files can be
 	searched by the Sync function for update tags. Text files are also preprocessed
 	when they are retrieved from the remote. [pp]
 	
@@ -224,7 +224,8 @@ Examples:
 		
 	st_get cfg/server.cfg server.php
 		
-		Download cfg/server.php and save it as cfg/server.cfg.
+		Download cfg/server.php and save it as cfg/server.cfg. If server.php.sync also
+		exists, it will be downloaded and saved as "cfg/server.cfg.sync".
 		
 Using Packages:
 	
@@ -450,16 +451,16 @@ Server Targets									#targets
 	
 	A file will be checked for updates if:
 	
-		It has a //[ST:SYNC] tag in the file:
+		It has a //[ST:SYNC] tag in the file (TEXT files only):
 		
-			Write //[ST:SYNC] with an optional remote path anywhere in a file
+			Write "//[ST:SYNC]" with an optional remote path anywhere in a file
 			e.g. "//[ST:SYNC] server.php". If the remote file is in a different
 			directory, you will need to write a full path (e.g. "cfg/test/test.php")
 			
 		It has a file with the same name plus a .sync extension:
 		
 			This is like [ST:SYNC] except designated for binary files or text
-			files which cannot contain this text. The contents of a .sync file
+			files which cannot contain extra data. The contents of a .sync file
 			can either be empty or the path to the remote file to update with.
 			
 		The "a" flag is set for the scan (all files).
@@ -622,6 +623,4 @@ exit										#.exit
 	
 	Aliases: quit
 
-
-	
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
