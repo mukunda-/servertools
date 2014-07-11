@@ -195,6 +195,8 @@ LoadMainConfig() {
 		KvGetString( kv, "dir", g_remote_dir, sizeof g_remote_dir, "files" );
 		KvGetString( kv, "dir_nosync", g_remote_dirns, sizeof g_remote_dirns, "files_nosync" );
 		KvGoBack(kv);
+		
+		BuildURLRequestParam();
 	}
 	
 	if( KvJumpToKey( kv, "syncpaths" ) ) {
@@ -272,8 +274,8 @@ LoadConfigs() {
 	
 	
 	
-	LoadMainConfig();
 	LoadIDConfig();
+	LoadMainConfig();
 	
 /*
 	if( KvJumpToKey( kv, "ftp" ) ) {
@@ -335,7 +337,7 @@ LoadConfigs() {
 BuildURLRequestParam() {
 	decl String:groups[64][64];
 	new count = ExplodeString( my_groups, " ", groups, sizeof groups, sizeof groups[] );
-	FormatEx( g_url_request_params, sizeof g_url_request_params, "id=%s&groups=", my_id );
+	FormatEx( g_url_request_params, sizeof g_url_request_params, "id=%s&key=%s&groups=", my_id, g_remote_key );
 	
 	for( new i = 0; i < count; i++ ) {
 		TrimString( groups[i] );

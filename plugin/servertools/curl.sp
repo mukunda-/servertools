@@ -10,6 +10,19 @@ new g_curl_default_options[][2] = {
 
 //-------------------------------------------------------------------------------------------------
 #define TRANSFER_ATTEMPTS 4
+
+Handle:SetupCurl( const String:url[], Handle:post=INVALID_HANDLE ) {
+	
+	new Handle:curl = curl_easy_init();
+	curl_easy_setopt_int_array( curl, g_curl_default_options, sizeof( g_curl_default_options ) );
+	new Handle:outfile = curl_OpenFile( tempfile, "wb" );
+	curl_easy_setopt_string( curl, CURLOPT_URL, url );
+	curl_easy_setopt_handle( curl, CURLOPT_WRITEDATA, outfile );
+	
+	if( post != INVALID_HANDLE ) {
+		curl_easy_setopt_handle( curl, CURLOPT_HTTPPOST, CURLBuildPost( post ) ); 
+	}
+}
   
 //-------------------------------------------------------------------------------------------------
 RemoteTransfer( const String:url[], TransferCompleteCallback:on_complete, any:data=0, Handle:post=INVALID_HANDLE ) {
@@ -22,16 +35,7 @@ RemoteTransfer( const String:url[], TransferCompleteCallback:on_complete, any:da
 	
 	KvSetString( kv, "file", tempfile );
 	
-	new Handle:curl = curl_easy_init();
-	curl_easy_setopt_int_array( curl, g_curl_default_options, sizeof( g_curl_default_options ) );
-	
-	new Handle:outfile = curl_OpenFile( tempfile, "wb" );
-	curl_easy_setopt_string( curl, CURLOPT_URL, url );
-	curl_easy_setopt_handle( curl, CURLOPT_WRITEDATA, outfile );
-	
-	if( post != INVALID_HANDLE ) {
-		curl_easy_setopt_handle( curl, CURLOPT_HTTPPOST, CURLBuildPost( post ) ); 
-	}
+	new Handle:curl = SetupCurl( url, post );
 	
 	KvSetHandle( kv, "outfile", outfile );
 	KvSetNum( kv, "attempt", 0 );
@@ -49,15 +53,9 @@ CURLRetryTransfer( Handle:kv ) {
 	decl String:tempfile[256];
 	KvGetString( kv, "file", tempfile, sizeof tempfile );
 	new Handle:post = Handle:KvGetNum( kv, "post" );
-	new Handle:curl = curl_easy_init();
+	//
+	new Handle:curl = SetupCurl( url, post );
 	
-	curl_easy_setopt_int_array( curl, g_curl_default_options, sizeof( g_curl_default_options ) );
-	new Handle:outfile = curl_OpenFile( tempfile, "wb" );
-	curl_easy_setopt_string( curl, CURLOPT_URL, url );
-	curl_easy_setopt_handle( curl, CURLOPT_WRITEDATA, outfile );
-	if( post != INVALID_HANDLE ) {
-		curl_easy_setopt_handle( curl, CURLOPT_HTTPPOST, CURLBuildPost( post ) );
-	}
 	KvSetHandle( kv, "outfile", outfile );
 	curl_easy_perform_thread( curl, OnCURLTransferComplete, kv );
 }
