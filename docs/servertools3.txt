@@ -21,7 +21,7 @@ Reading the manual
 ---------------------------------------------------------------------------------------------------
 Installation									#installation
 	
-	Extract the server tools package to your computer. 
+	Extract the ServerTools package to your computer. 
 	
 	The ServerTools package is in 3 parts:
 	
