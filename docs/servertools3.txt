@@ -9,7 +9,7 @@
 			
 
 ---------------------------------------------------------------------------------------------------
-Plugin Version As Of Writing: 3.0.1					6:57 PM 7/10/2014
+Plugin Version As Of Writing: 3.0.2					8:16 PM 7/10/2014
 ---------------------------------------------------------------------------------------------------
 Reading the manual
 
@@ -275,7 +275,7 @@ Example:
 >>> st_remove pl/test	// deletes sourcemod/plugins/test.smx
 
 ---------------------------------------------------------------------------------------------------
-st_sync	<target> [-aprf]							#stsync
+st_sync	<target> [-aprfm]							#stsync
 	
 Description:
 	Performs a Server Sync. [sync]
@@ -301,6 +301,9 @@ Description:
 	
 	The "f"	flag (force-sync) is a special flag that is only used manually, and causes all files 
 	marked for sync to be updated regardless of out-of-date checks.
+	
+	The "m" flag is also a flag that is only used manually, and it tells ServerTools to not
+	reload the map after the sync is complete and files have changed.
 	
 	Flags are optional and do not have to come after the target argument.
 	
@@ -480,6 +483,9 @@ Server Targets									#targets
 	be updated if the date on the file on the remote is newer than the file on disk. A BINARY
 	file will be updated if the file on the remote is newer, or if the file size is different.
 	 	
+	If files are updated and no people are playing in the server, the map will be reloaded.
+	For a manual sync, you can cancel the map reload by specifying the "-m" option.
+	
 ===================================================================================================
  ServerTools Console 						 		#console
 ===================================================================================================
