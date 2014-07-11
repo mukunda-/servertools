@@ -1,6 +1,6 @@
 
 enum {
-	GET_SYNC=1 //TODO
+	//GET_SYNC=1 //TODO
 };
 enum {
 	GETMODE_SINGLE=1,
@@ -37,8 +37,8 @@ public Action:Command_remove( args ) {
 //-------------------------------------------------------------------------------------------------
 public Action:Command_get( args ) {
 	if( args == 0 ) {
-		PrintToServer( "[ST] Usage: st_get <target> [remote] [-s]" );
-		PrintToServer( "[ST]   -s : create sync file" );
+		PrintToServer( "[ST] Usage: st_get <target> [remote]" );
+		//PrintToServer( "[ST]   -s : create sync file" );
 		return Plugin_Handled;
 	}
 	if( g_remote_url[0] == 0 ) {
@@ -55,12 +55,12 @@ public Action:Command_get( args ) {
 		decl String:arg[128];
 		GetCmdArg( 1+i, arg, sizeof arg );
 		if( arg[0] == '-' ) {
-			if( arg[1] == 's' ) {
-				flags |= GET_SYNC;
-			} else {
-				PrintToServer( "[ST] st_get - Unknown option: \"%c\"", arg[1] );
-				return Plugin_Handled;
-			}
+			//if( arg[1] == 's' ) {
+		//		flags |= GET_SYNC;
+		//	} else {
+			PrintToServer( "[ST] st_get - Unknown option: \"%c\"", arg[1] );
+			return Plugin_Handled;
+		//	}
 		} else {
 			if( target[0] == 0 ){
 				strcopy( target, sizeof target, arg );
@@ -91,13 +91,10 @@ public Action:Command_get( args ) {
 		PrintToServer( "[ST] st_get - bad path" );
 		return Plugin_Handled;
 	}
-	if( remote[0] == 0 ) {
-		strcopy( remote, sizeof remote, target );
-	} else {
-		if( !FormatLocalPath( remote, sizeof remote, remote ) ) {
-			PrintToServer( "[ST] st_get - bad remote path" );
-			return Plugin_Handled;
-		}
+	
+	if( !TranslateRemotePath( target, remote, sizeof remote ) ) {
+		PrintToServer( "[ST] st_get - bad remote path" );
+		return Plugin_Handled;
 	}
 	
 	DoGet( target, remote, flags );
@@ -229,7 +226,7 @@ public OnGetPackage( Handle:hndl, bool:success, any:data ) {
 			decl String:localfile[128];
 			decl String:remotefile[128];
 			KvGetSectionName( kv, localfile, sizeof localfile );
-			PrintToServer( "DEBUG3: %s", localfile );
+			
 			TrimString( localfile );
 			if( localfile[0] == 0 ) continue;
 			if( !FormatLocalPath( localfile, sizeof localfile, localfile ) ) {

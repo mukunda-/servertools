@@ -185,6 +185,24 @@ StartSync( const String:target[], forceflags=0 ) {
 }
 
 //-------------------------------------------------------------------------------------------------
+bool:TranslateRemotePath( const String:localpath[], String:remotepath[], maxlen ) {
+	TrimString( remotepath );
+	if( remotepath[0] == 0 ) {
+		strcopy( remotepath, maxlen, localpath );
+		return true;
+	}
+	if( StrContains( remotepath, "/" ) >= 0 ) {
+		// absolute path
+		return FormatLocalPath( remotepath, maxlen, remotepath );
+	} else {
+		decl String:curdir[128];
+		StripFileName( curdir, sizeof curdir, localpath );
+		Format( remotepath, maxlen, "%s%s", curdir, remotepath );
+		return true;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
 bool:ScanFileForSync( const String:file[], String:syncpath[], maxlen, bool:text ) {
 	
 	new Handle:f;
@@ -200,23 +218,8 @@ bool:ScanFileForSync( const String:file[], String:syncpath[], maxlen, bool:text 
 			
 			// found sync line
 			strcopy( syncpath, maxlen, line[index+11] );
-			TrimString(syncpath);
-			if( syncpath[0] == 0 ) {
-				strcopy( syncpath, maxlen, file );
-			} else {
-				if( StrContains( syncpath, "/" ) >= 0 ) {
-					 // absolute path
-					if( !FormatLocalPath( syncpath, maxlen, syncpath ) ) {
-						LogToFile( g_logfile, "bad [ST:SYNC] remote path in file \"%s\"", file );
-						return false;
-					} 
-				} else {
-					// relative path
-					decl String:curdir[128];
-					StripFileName( curdir, sizeof curdir, file );
-					Format( syncpath, maxlen, "%s%s", curdir, syncpath );
-				}
-				
+			if( !TranslateRemotePath( file, syncpath, sizeof syncpath ) ) {
+				LogToFile( g_logfile, "bad [ST:SYNC] remote path in file \"%s\"", file );
 			}
 			 
 			return true;
@@ -232,19 +235,12 @@ bool:ScanFileForSync( const String:file[], String:syncpath[], maxlen, bool:text 
 		decl String:line[256];
 		f = OpenFile( file2, "r" );
 		if( ReadFileLine( f, line, sizeof line ) ) {
-			
-			TrimString(line);
-			if( line[0] != 0 ) {
-				strcopy( syncpath, maxlen, line );
-				if( !FormatLocalPath( syncpath, maxlen, syncpath ) ) {
-					LogToFile( g_logfile, "bad path in syncfile \"%s\"", file2 );
-					CloseHandle(f);
-					return false;
-				} 
-				
-				CloseHandle(f);
-				return true;
+			CloseHandle(f);
+			if( !TranslateRemotePath( file, syncpath, sizeof syncpath ) {
+				LogToFile( g_logfile, "bad path in syncfile \"%s\"", file2 );
+				return false;
 			}
+			return true;
 		}
 		
 		// if empty: use original path
@@ -354,7 +350,6 @@ public OnSyncStart( Handle:op ) {
 			new flags = ReadPackCell( g_sync_paths );
 			if( StrEqual( syncgroup, group ) ) {
 				
-				PrintToServer(" DEBUG: SYNCSCAN %s", path );
 				ScanForSync( updatelist, path, 0, flags|forceflags );
 			}
 		}
