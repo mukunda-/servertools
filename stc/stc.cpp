@@ -369,7 +369,7 @@ private:
 		Echo( "[%s] %s", id.c_str(), rcon_result.c_str() );
 
 		if(operation_id) {
-			
+			WaitForOp( operation_id );
 		}
 		return boost::system::error_code();
 	}
@@ -581,7 +581,8 @@ public:
 		//is_busy = true;
 
 		int retries=30;
-		std::string poll_packet = "st_status " + operation_id;
+		
+		std::string poll_packet = "st_status " + std::to_string(operation_id);
 
 		for( ;; ) {
 			
