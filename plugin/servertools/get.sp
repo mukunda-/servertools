@@ -167,9 +167,9 @@ public OnGetPackage( Handle:hndl, bool:success, any:data ) {
 		KvGetString( op, "user/target", package, sizeof package );
 		if( KvGetNum( hndl, "notfound" ) ) {
 			
-			OperationError( op, "Package doesn't exist. \"%s\"", package );
+			OperationError( op, "Package doesn't exist. \"%s.package\"", package );
 		} else {
-			OperationError( op, "Couldn't retrieve package. \"%s\"", package );
+			OperationError( op, "Couldn't retrieve package. \"%s.package\"", package );
 		}
 		CleanupGetOp( op );
 		EndOperation(op);
@@ -331,34 +331,40 @@ public OnGetFile( Handle:hndl, bool:success, any:data ) {
 			GetDownload( op );
 		}
 	} else {
+		decl String:localfile[128];
+		KvGetString( op, "user/currentlocalfile", localfile, sizeof localfile ); 
+		if( downloadmode == 2 ) {
+			StrCat( localfile, sizeof localfile, ".sync" );
+		}
+		
+		decl String:outfile[128];
+		KvGetString( hndl, "file", outfile, sizeof outfile );
+		
 		if( downloadmode != 2 ) {
-			decl String:localfile[128];
-			KvGetString( op, "user/currentlocalfile", localfile, sizeof localfile ); 
-			decl String:outfile[128];
-			KvGetString( hndl, "file", outfile, sizeof outfile );
-			PrimeFileTarget( localfile );
-			
 			decl String:ext[32];
 			GetFileExt( ext, sizeof ext, localfile );
 			if( IsTrieSet( g_text_extensions, ext ) ) {
 				PreprocessFile( op, outfile, sizeof outfile );
 			}
-			OperationLog( op, "saving \"%s\"...", localfile );
-			if( RenameFile( localfile, outfile ) ) {
-				KvSetNum( op, "user/count", KvGetNum( op, "user/count" ) + 1 );
-			} else {
-				OperationError( op, "disk error." );
-			}
-			
-			if( downloadmode == 0 ) {
-				// this was downloaded from the normal files, try to get a sync file.
-				KvSetNum( op, "user/downloadmode", 2 );
-				decl String:url[512];
-				FormatEx( url, sizeof url, "%s%s/%s.sync?%s", g_remote_url, g_remote_dir, remotefile, g_url_request_params );
-				RemoteTransfer( url, OnGetFile, op );
-				return;
-			}
 		}
+		
+		OperationLog( op, "saving \"%s\"...", localfile );
+		PrimeFileTarget( localfile );
+		if( RenameFile( localfile, outfile ) ) {
+			KvSetNum( op, "user/count", KvGetNum( op, "user/count" ) + 1 );
+		} else {
+			OperationError( op, "disk error." );
+		}
+			
+		if( downloadmode == 0 ) {
+			// this was downloaded from the normal files, try to get a sync file.
+			KvSetNum( op, "user/downloadmode", 2 );
+			decl String:url[512];
+			FormatEx( url, sizeof url, "%s%s/%s.sync?%s", g_remote_url, g_remote_dir, remotefile, g_url_request_params );
+			RemoteTransfer( url, OnGetFile, op );
+			return;
+		}
+		
 		GetDownload(op);
 	}
 }
