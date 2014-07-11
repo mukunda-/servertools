@@ -11,7 +11,10 @@ new g_curl_default_options[][2] = {
 //-------------------------------------------------------------------------------------------------
 #define TRANSFER_ATTEMPTS 4
 
-Handle:SetupCurl( const String:url[], Handle:post=INVALID_HANDLE ) {
+Handle:SetupCurl( Handle:kv, const String:url[], Handle:post=INVALID_HANDLE ) {
+	decl String:tempfile[256];
+	GetTempFile( tempfile, sizeof(tempfile) );
+	KvSetString( kv, "file", tempfile );
 	
 	new Handle:curl = curl_easy_init();
 	curl_easy_setopt_int_array( curl, g_curl_default_options, sizeof( g_curl_default_options ) );
@@ -22,6 +25,8 @@ Handle:SetupCurl( const String:url[], Handle:post=INVALID_HANDLE ) {
 	if( post != INVALID_HANDLE ) {
 		curl_easy_setopt_handle( curl, CURLOPT_HTTPPOST, CURLBuildPost( post ) ); 
 	}
+	KvSetHandle( kv, "outfile", outfile );
+	return curl;
 }
   
 //-------------------------------------------------------------------------------------------------
@@ -29,15 +34,9 @@ RemoteTransfer( const String:url[], TransferCompleteCallback:on_complete, any:da
 	
 	new Handle:kv = CreateKeyValues( "STDownload" );
 	KvSetString( kv, "url", url );
+	 
+	new Handle:curl = SetupCurl( kv, url, post );
 	
-	decl String:tempfile[256];
-	GetTempFile( tempfile, sizeof(tempfile) );
-	
-	KvSetString( kv, "file", tempfile );
-	
-	new Handle:curl = SetupCurl( url, post );
-	
-	KvSetHandle( kv, "outfile", outfile );
 	KvSetNum( kv, "attempt", 0 );
 	KvSetHandle( kv, "post", post );
 	KvSetNum( kv, "userdata", data );
@@ -50,13 +49,7 @@ RemoteTransfer( const String:url[], TransferCompleteCallback:on_complete, any:da
 CURLRetryTransfer( Handle:kv ) {
 	decl String:url[512];
 	KvGetString( kv, "url", url, sizeof url );
-	decl String:tempfile[256];
-	KvGetString( kv, "file", tempfile, sizeof tempfile );
-	new Handle:post = Handle:KvGetNum( kv, "post" );
-	//
-	new Handle:curl = SetupCurl( url, post );
-	
-	KvSetHandle( kv, "outfile", outfile );
+	new Handle:curl = SetupCurl( kv, url, KvGetHandle( kv, "post" ) );
 	curl_easy_perform_thread( curl, OnCURLTransferComplete, kv );
 }
  
@@ -101,6 +94,10 @@ public OnCURLTransferComplete( Handle:hndl, CURLcode:code, any:kv ) {
 	curl_easy_getinfo_int( hndl, CURLINFO_RESPONSE_CODE, response );
 	CloseHandle(hndl);
 	if( code != CURLE_OK || response != HTTP_RESPONSE_OK  ) {
+	
+		decl String:file[128];
+		KvGetString( kv, "file", file, sizeof file );
+		TryDeleteFile( file );
 		
 		// retry if not 404 and not too many attempts
 		new attempt = KvGetNum( kv, "attempt" );
@@ -109,9 +106,7 @@ public OnCURLTransferComplete( Handle:hndl, CURLcode:code, any:kv ) {
 			if( response == 404 ) {
 				KvSetNum( kv, "notfound", 1 );
 			}
-			decl String:file[128];
-			KvGetString( kv, "file", file, sizeof file );
-			TryDeleteFile( file );
+			
 			
 			Call_StartFunction( INVALID_HANDLE, Function:KvGetNum( kv, "on_complete" ) );
 			Call_PushCell( kv );
