@@ -232,9 +232,9 @@ bool:ScanFileForSync( const String:file[], String:syncpath[], maxlen, bool:text 
 	FormatEx( file2, sizeof file2, "%s.sync", file );
 	if( FileExists( file2 ) ) {
 		// file exists, first line is sync path
-		decl String:line[256];
+
 		f = OpenFile( file2, "r" );
-		if( ReadFileLine( f, line, sizeof line ) ) {
+		if( ReadFileLine( f, syncpath, maxlen ) ) {
 			CloseHandle(f);
 			if( !TranslateRemotePath( file, syncpath, maxlen ) ) {
 				LogToFile( g_logfile, "bad path in syncfile \"%s\"", file2 );

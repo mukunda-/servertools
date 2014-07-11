@@ -97,6 +97,7 @@ public Action:Command_get( args ) {
 		return Plugin_Handled;
 	}
 	
+	
 	DoGet( target, remote, flags );
 	return Plugin_Handled;
 }
@@ -141,10 +142,10 @@ public OnGetStart( Handle:op ) {
 	
 	if( mode == GETMODE_SINGLE ) {
 		decl String:path[128];
-		KvGetString( op, "user/target", path, sizeof path );
-		WritePackString( downloads, path );
 		KvGetString( op, "user/remote", path, sizeof path );
 		WritePackString( downloads, path ); 
+		KvGetString( op, "user/target", path, sizeof path );
+		WritePackString( downloads, path );
 		
 		ResetPack( downloads );
 		GetDownload( op );
@@ -303,7 +304,6 @@ GetDownload( Handle:op ) {
 //-------------------------------------------------------------------------------------------------
 public OnGetFile( Handle:hndl, bool:success, any:data ) {
 	new Handle:op = data;
-	new Handle:downloads = KvGetHandle( op, "user/downloadlist" );
 	
 	decl String:remotefile[128];
 	KvGetString( op, "user/currentfile", remotefile, sizeof remotefile );
@@ -321,7 +321,7 @@ public OnGetFile( Handle:hndl, bool:success, any:data ) {
 			
 		} else if( downloadmode == 1 ) {
 			OperationError( op, "Couldn't retrieve file: %s", remotefile );
-			ReadPackString( downloads, remotefile, sizeof remotefile ); // skip local file path
+			
 			GetDownload( op );
 			
 		} else {
@@ -357,10 +357,12 @@ public OnGetFile( Handle:hndl, bool:success, any:data ) {
 		}
 			
 		if( downloadmode == 0 ) {
+			
 			// this was downloaded from the normal files, try to get a sync file.
 			KvSetNum( op, "user/downloadmode", 2 );
 			decl String:url[512];
 			FormatEx( url, sizeof url, "%s%s/%s.sync?%s", g_remote_url, g_remote_dir, remotefile, g_url_request_params );
+		
 			RemoteTransfer( url, OnGetFile, op );
 			return;
 		}
