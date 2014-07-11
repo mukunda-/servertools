@@ -328,7 +328,7 @@ public OnSyncStart( Handle:op ) {
 	new syncmode = KvGetNum( op, "user/syncmode" );
 	new forceflags = KvGetNum( op, "user/forceflags" );
 	if( syncmode == SYNCMODE_ALL ) {
-
+	
 		ResetPack( g_sync_paths );
 		while( IsPackReadable( g_sync_paths, 1 ) ) {
 			decl String:path[128];

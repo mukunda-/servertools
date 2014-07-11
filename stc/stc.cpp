@@ -294,6 +294,19 @@ private:
 
 	boost::mutex busy;
 	boost::condition_variable waiter;
+	
+	void FilterRConLogging( std::string &response ) {
+		std::string output;
+		std::istringstream stream( response );
+		std::string line;
+		std::regex e( "^L [0-9]{2}\\/[0-9]{2}\\/[0-9]{4} - [0-9]{2}:[0-9]{2}:[0-9]{2}: rcon from \"" );
+		while( std::getline(stream, line) ) {
+			if( !std::regex_search( line, e ) ) {
+				output += line + "\n";
+			}
+		}
+		response = output;
+	}
 
 	//-----------------------------------------------------------------------------------------------
 	boost::system::error_code ExecCommand() {
@@ -366,6 +379,7 @@ private:
 		}
 		
 		// print to client
+		FilterRConLogging( rcon_result );
 		Echo( "[%s] %s", id.c_str(), rcon_result.c_str() );
 
 		if(operation_id) {
@@ -611,6 +625,7 @@ public:
 				int start = response.find_first_of( '\n' );
 				start++;
 				response = response.substr(start);
+				FilterRConLogging( response );
 				Echo( "[%s] %s", id.c_str(), response.c_str() );
 				break;
 			} else {

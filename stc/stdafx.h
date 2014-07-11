@@ -26,3 +26,5 @@
 #include <time.h>
 #include <boost/tokenizer.hpp>
 // TODO: reference additional headers your program requires here
+
+#include <regex> // THANK YOU C++11
