@@ -13,8 +13,10 @@
 
 #pragma semicolon 1
 
-#define PLUGIN_VERSION "3.0.2"
+#define PLUGIN_VERSION "3.0.3"
 
+// 3.0.3
+//   run sync in onpluginstart.
 // 3.0.2
 //   bugfixes
 // 3.0.1
@@ -137,14 +139,15 @@ public OnPluginStart() {
 		Updater_AddPlugin(UPDATE_URL);
 	}
 	
-}
-
-//-------------------------------------------------------------------------------------------------
-public OnConfigsExecuted() {
 	if( GetTime() >= (GetLastSync() + SYNC_INTERVAL) ) {
 		LogToFile( g_logfile, "Performing sync..." );
 		StartSync( "all" );
 	}
+}
+
+//-------------------------------------------------------------------------------------------------
+public OnConfigsExecuted() {
+	
 }
  
 
