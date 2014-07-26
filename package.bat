@@ -28,6 +28,7 @@ copy plugin\servertools\* package\server\scripting\servertools\ /Y
 copy servertools.cfg.example package\server\configs /Y
 copy servertools_id.cfg.example package\server\configs /Y
 copy web\listing.php package\remote /Y
+copy web\setkey.php package\remote /Y
 copy stc\autoexec_stock.cfg package\stc\win32\autoexec.cfg /Y
 copy stc\Release\stc.exe package\stc\win32 /Y
 copy stc\LICENSE_1_0.txt package\stc\win32 /Y
