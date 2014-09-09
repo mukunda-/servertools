@@ -1,5 +1,10 @@
-// stc.cpp : Defines the entry point for the console application.
-//
+/*
+ * ServerTools Console
+ *
+ * Copyright 2014 Mukunda Johnson
+ *
+ * Licensed under The MIT License, see COPYING.MIT
+ */
 
 #include "stdafx.h"
 

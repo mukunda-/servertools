@@ -1,19 +1,21 @@
-mkdir updater
-mkdir updater\plugins
-mkdir updater\scripting
-mkdir updater\scripting\servertools
-mkdir updater\docs
+@REM This is for copying docs,binaries, and stuff to the release packages
 
-mkdir package
-mkdir package\server
-mkdir package\server\configs
-mkdir package\server\plugins
-mkdir package\server\docs
-mkdir package\server\scripting
-mkdir package\server\scripting\servertools
-mkdir package\remote
-mkdir package\stc
-mkdir package\stc\win32
+@mkdir updater
+@mkdir updater\plugins
+@mkdir updater\scripting
+@mkdir updater\scripting\servertools
+@mkdir updater\docs
+
+@mkdir package
+@mkdir package\server
+@mkdir package\server\configs
+@mkdir package\server\plugins
+@mkdir package\server\docs
+@mkdir package\server\scripting
+@mkdir package\server\scripting\servertools
+@mkdir package\remote
+@mkdir package\stc
+@mkdir package\stc\win32
 
 copy plugin\servertools.sp updater\scripting\ /Y
 copy plugin\servertools\* updater\scripting\servertools\ /Y
@@ -33,15 +35,13 @@ copy stc\autoexec_stock.cfg package\stc\win32\autoexec.cfg /Y
 copy stc\Release\stc.exe package\stc\win32 /Y
 copy stc\LICENSE_1_0.txt package\stc\win32 /Y
 
+@echo ***
+@echo ***
+@echo *** don't forget to set version in servertools_update.txt ***
+@echo *** and compile smx! ***
+@echo ***
+@echo ***
+@echo (all done)
+@echo -----------------------
 
-@echo off
-echo ***
-echo ***
-echo *** don't forget to set version in servertools_update.txt ***
-echo *** and compile smx! ***
-echo ***
-echo ***
-echo (all done)
-echo -----------------------
-
-pause
+@pause

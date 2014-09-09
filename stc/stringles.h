@@ -1,3 +1,11 @@
+/*
+ * ServerTools Console
+ *
+ * Copyright 2014 Mukunda Johnson
+ *
+ * Licensed under The MIT License, see COPYING.MIT
+ */
+ 
 #pragma once
 
 #ifndef UTIL_STRINGLES_H

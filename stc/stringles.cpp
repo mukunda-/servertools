@@ -1,3 +1,10 @@
+/*
+ * ServerTools Console
+ *
+ * Copyright 2014 Mukunda Johnson
+ *
+ * Licensed under The MIT License, see COPYING.MIT
+ */
 
 #include "stdafx.h"
 

@@ -220,3 +220,4 @@ updater/plugins/
 updater/scripting
 package/
 *.smx
+stc/stc.exe
