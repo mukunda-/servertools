@@ -27,8 +27,10 @@
 
 #pragma semicolon 1
 
-#define PLUGIN_VERSION "3.0.3"
+#define PLUGIN_VERSION "3.0.4"
 
+// 3.0.4
+//   fix game dir scan
 // 3.0.3
 //   run sync in onpluginstart.
 // 3.0.2
@@ -654,7 +656,10 @@ bool:FormatLocalPath( String:output[], maxlen, const String:path[] ) {
 		
 	} else if( strncmp( path, "game/", 5 ) == 0 ) {
 		Format( output, maxlen, path[5] );
-		if( output[0] == 0 ) output = ".";
+		
+		if( output[0] == 0 ) {
+			strcopy( output, maxlen, "/" );
+		}
 		
 	} else if( strncmp( path, "cfg/", 4 ) == 0 ) {
 		Format( output, maxlen, "cfg/%s", path[4] );
