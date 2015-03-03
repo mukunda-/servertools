@@ -654,6 +654,7 @@ bool:FormatLocalPath( String:output[], maxlen, const String:path[] ) {
 		
 	} else if( strncmp( path, "game/", 5 ) == 0 ) {
 		Format( output, maxlen, path[5] );
+		if( output[0] == 0 ) output = ".";
 		
 	} else if( strncmp( path, "cfg/", 4 ) == 0 ) {
 		Format( output, maxlen, "cfg/%s", path[4] );
