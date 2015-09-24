@@ -5,18 +5,18 @@
 ---------------------------------------------------------------------------------------------------
 											
                                   THIS PAGE INTENTIONALLY LEFT BLANK
-			
-			
+	
+	
 
 ---------------------------------------------------------------------------------------------------
-Plugin Version As Of Writing: 3.0.2					9:45 PM 7/10/2014
+Plugin Version As Of Writing: 3.0.4					12:50 AM 3/10/2015
 ---------------------------------------------------------------------------------------------------
 Reading the manual
 
 	Please view with tabstop:8
 	
 	Whenever [terms] are mentioned, they are a reference to a page index which can be 
-	found with the corresponding hashtag. ie [filepaths] refers to #filepaths.
+	found with the corresponding hashtag. e.g. [filepaths] refers to #filepaths.
 	
 ---------------------------------------------------------------------------------------------------
 Installation									#installation

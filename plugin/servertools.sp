@@ -127,7 +127,8 @@ public OnLibraryAdded(const String:name[]) {
 //-------------------------------------------------------------------------------------------------
 public OnPluginStart() {
 
-	CreateConVar( "servertools_plugin_version", PLUGIN_VERSION, "ServerTools Plugin Version", FCVAR_PLUGIN|FCVAR_NOTIFY|FCVAR_DONTRECORD|FCVAR_REPLICATED );
+	CreateConVar( "servertools_plugin_version", PLUGIN_VERSION, "ServerTools Plugin Version", 
+					FCVAR_PLUGIN|FCVAR_NOTIFY|FCVAR_DONTRECORD|FCVAR_REPLICATED );
 	BuildPath( Path_SM, g_logfile, sizeof g_logfile, "logs/servertools.log" );
 	InitTempFiles();
 	
@@ -757,7 +758,6 @@ PrimeFileTarget( const String:file[] ) {
 	}
 	return true;
 }
-
 
 //-------------------------------------------------------------------------------------------------
 public Action:Command_test( args ) {
