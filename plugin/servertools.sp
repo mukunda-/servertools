@@ -100,7 +100,7 @@ public Plugin:myinfo =
 #include "servertools/curl.sp"
 #include "servertools/get.sp"
 #include "servertools/sync.sp"
- 
+#include "servertools/changegroups.sp"
 
 
 #define SYNC_INTERVAL 60*60 // sync if server is started at least one hour after last sync
@@ -149,6 +149,9 @@ public OnPluginStart() {
 	RegServerCmd( "st_sync", Command_sync, "Synchronize server files" );
 	RegServerCmd( "st_get", Command_get, "Get file" );
 	RegServerCmd( "st_remove", Command_remove, "Delete file" );
+	
+	RegServerCmd( "st_addgroups", Command_addgroups, "Add server groups." );
+	RegServerCmd( "st_removegroups", Command_removegroups, "Remove server groups." );
 	
 	LoadConfigs();
 	
@@ -202,6 +205,13 @@ Handle:LoadKVConfig( const String:name[], const String:path[] ) {
 		return INVALID_HANDLE;
 	}
 	return kv;
+}
+
+//-------------------------------------------------------------------------------------------------
+SaveKVConfig( Handle:kv, const String:path[] ) {
+	decl String:configpath[256];
+	BuildPath( Path_SM, configpath, sizeof(configpath), "configs/%s", path );
+	KeyValuesToFile( kv, configpath );
 }
 
 //-------------------------------------------------------------------------------------------------

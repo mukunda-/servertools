@@ -121,13 +121,13 @@ public Action:Command_get( args ) {
 }
 
 //-------------------------------------------------------------------------------------------------
-DoGetPackage( const String:package[], flags ) {
+DoGetPackage( const String:pkg[], flags ) {
 	
 	LoadIDConfig();
 
 	new Handle:op = CreateOperation( "Server Get", OnGetStart );
 	KvSetNum( op, "user/mode", GETMODE_PACKAGE );
-	KvSetString( op, "user/target", package );
+	KvSetString( op, "user/target", pkg );
 	KvSetNum( op, "user/flags", flags );
 	StartOperation(op);
 	
@@ -182,13 +182,13 @@ public OnGetPackage( Handle:hndl, bool:success, any:data ) {
 	if( !success ) {
 		
 		
-		decl String:package[64];
-		KvGetString( op, "user/target", package, sizeof package );
+		decl String:pkg[64];
+		KvGetString( op, "user/target", pkg, sizeof pkg );
 		if( KvGetNum( hndl, "notfound" ) ) {
 			
-			OperationError( op, "Package doesn't exist. \"%s.package\"", package );
+			OperationError( op, "Package doesn't exist. \"%s.package\"", pkg );
 		} else {
-			OperationError( op, "Couldn't retrieve package. \"%s.package\"", package );
+			OperationError( op, "Couldn't retrieve package. \"%s.package\"", pkg );
 		}
 		CleanupGetOp( op );
 		EndOperation(op);
