@@ -8,7 +8,7 @@
 
 #include "stdafx.h"
 
-#define VERSION "3.0.0"
+#define VERSION "3.0.1"
 
 const char *startup_message = 
 	"\n"
