@@ -27,8 +27,10 @@
 
 #pragma semicolon 1
 
-#define PLUGIN_VERSION "3.0.4"
+#define PLUGIN_VERSION "3.0.5"
 
+// 3.0.5
+//   st_addgroups, st_removegroups
 // 3.0.4
 //   fix game dir scan
 // 3.0.3

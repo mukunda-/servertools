@@ -4,7 +4,7 @@
 	{
 		"Version"
 		{
-			"Latest"	"3.0.3"
+			"Latest"	"3.0.5"
 		}
 		
 		"Notes"	"Handle with care"
@@ -16,6 +16,7 @@
 		"Plugin"	"Path_SM/plugins/servertools.smx"
 		"Plugin"	"Path_SM/docs/servertools.txt"
 		"Source"	"Path_SM/scripting/servertools.sp"
+		"Source"	"Path_SM/scripting/servertools/changegroups.sp"
 		"Source"	"Path_SM/scripting/servertools/curl.sp"
 		"Source"	"Path_SM/scripting/servertools/get.sp"
 		"Source"	"Path_SM/scripting/servertools/globals.sp"
@@ -24,7 +25,6 @@
 		"Source"	"Path_SM/scripting/servertools/oldsync.txt"
 		"Source"	"Path_SM/scripting/servertools/operations.sp"
 		"Source"	"Path_SM/scripting/servertools/sync.sp"
-		"Source"	"Path_SM/scripting/servertools/trash.txt"
-
+		"Source"	"Path_SM/scripting/servertools/trash.txt" 
 	}
 }

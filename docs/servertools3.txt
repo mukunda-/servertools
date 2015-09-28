@@ -9,7 +9,7 @@
 	
 
 ---------------------------------------------------------------------------------------------------
-Plugin Version As Of Writing: 3.0.4					12:50 AM 3/10/2015
+Plugin Version As Of Writing: 3.0.5					12:32 PM 9/28/2015
 ---------------------------------------------------------------------------------------------------
 Reading the manual
 
@@ -209,6 +209,8 @@ Full Command Listing								#cmdlist
 	st_remove		Remove file			[remove]
 	st_sync			Perform Sync			[stsync]
 	st_status		Read operation status		[status]
+	st_addgroups		Add server groups		[addgroups]
+	st_removegroups		Remove server groups		[removegroups]
 
 ---------------------------------------------------------------------------------------------------
 st_id										#id
@@ -381,6 +383,33 @@ Examples:
 
 	See [sync] for more information.
 	
+---------------------------------------------------------------------------------------------------
+st_addgroups <groups>								#addgroups
+
+Description:
+	Join server groups.
+	
+	This modifies the servertools_id.cfg and adds a list of groups to the groups string.
+	
+Example:
+
+>>> st_addgroups test help	// Makes the server join the groups "test" and "help"
+
+---------------------------------------------------------------------------------------------------
+st_removegroups <groups>							#removegroups
+
+Description:
+	Leave server groups.
+	
+	This modifies the servertools_id.cfg and removes a list of groups from the groups string.
+	
+Example:
+
+>>> st_removegroups test help	// Makes the server leave the groups "test" and "help" if it is
+				// in either of them.
+				// If the server has a group string of "test csgo mania" then
+				// it will become "csgo mania".
+
 ===================================================================================================
 Server Specific Configuration (Preprocessing)					#pp
 	
@@ -585,6 +614,8 @@ Command Listing									#.list
 	get		Perform Server Get		[.get]
 	remove		Delete File			[.remove]
 	sync		Perform Server Sync		[.sync]
+	addgroups	Add groups to server(s)		[.addgroups]
+	removegroups	Remove groups from server(s)	[.removegroups]
 	exec		Execute script			[.exec] 
 	exit		End Session			[.exit]
  
@@ -668,6 +699,20 @@ remove <params>									#.remove
 	Runs the command "st_remove ..." on all selected servers. (deletes a file)
 	
 	See [remove]
+	
+---------------------------------------------------------------------------------------------------
+addgroups <groups>								#.addgroups
+
+	Runs the command "st_addgroups ..." on all selected servers.
+	
+	See [addgroups]
+	
+---------------------------------------------------------------------------------------------------
+removegroups <groups>								#.removegroups
+
+	Runs the command "st_removegroups ..." on all selected servers.
+	
+	See [removegroups]
 	
 ---------------------------------------------------------------------------------------------------
 exec <script>									#.exec

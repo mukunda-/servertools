@@ -211,6 +211,11 @@ class CommandParams {
 public:
 	CommandParams() {}
 
+	void Reset() { 
+		params.clear();
+		arg_string = "";
+	}
+
 	void Parse( std::string &command ) {
 		Parse( command.c_str() );
 	}
@@ -447,51 +452,9 @@ private:
 
 		if( refresh_info ) {
 
-			// retrieve ID info from the server
-			//
-			packet.Set( Packet::SERVERDATA_EXECCOMMAND, "st_id" );
-			err = packet.Send( socket );
-			if( err ) {
-				EchoError( "ERROR@%s: %s", address.c_str(), "Network Failure (send)" );
-				return;
-			}
-			err = packet.Recv( socket );
-			if( err ) {
-				EchoError( "ERROR@%s: %s", address.c_str(), "Network Failure (recv)" );
-				return;
-			}
-			
-			// parse data
-			std::string &data = packet.GetData();
-			if( data.find( "Unknown command") != std::string::npos ) {
-				EchoError( "ERROR@%s: %s", address.c_str(), "ServerTools is not installed." );
-				return;
-			}
-			
-			int start = data.find( "[ST] id = \"" );
-			if( start != std::string::npos) {
-				start += 11;
-				int end = data.find( '"', start+1 );
-				id = data.substr( start, end-start );
-			} else {
-				
-				EchoError( "ERROR@%s: %s", address.c_str(), "ServerTools is not installed." );
-				return;
-			}
-			
-			start = data.find( "[ST] groups = \"" );
-			if( start != std::string::npos ) {
-				
-				start += 15;
-				int end = data.find( '"', start+1 );
-				groups = data.substr( start, end-start );
-				parsed_groups.Parse( groups );
-			}
-
+			RefreshID(); 
 			EchoNotice( "Added Server: %s, ID=\"%s\", GROUPS=\"%s\"", address.c_str(), id.c_str(), groups.c_str() );
 
-			refresh_info = false;
-			// register server
 		} 
 		connected = true; 
 	}
@@ -757,6 +720,60 @@ public:
 		}
 		return is_target;
 	}
+
+	//-----------------------------------------------------------------------------------------------
+	void RefreshID() {
+		// retrieve ID info from the server
+		//
+		Packet packet;
+
+		packet.Set( Packet::SERVERDATA_EXECCOMMAND, "st_id" );
+		boost::system::error_code err = packet.Send( socket );
+		if( err ) {
+			EchoError( "ERROR@%s: %s", address.c_str(), "Network Failure (send)" );
+			return;
+		}
+		err = packet.Recv( socket );
+		if( err ) {
+			EchoError( "ERROR@%s: %s", address.c_str(), "Network Failure (recv)" );
+			return;
+		}
+			
+		// parse data
+		std::string &data = packet.GetData();
+		if( data.find( "Unknown command") != std::string::npos ) {
+			EchoError( "ERROR@%s: %s", address.c_str(), "ServerTools is not installed." );
+			return;
+		}
+			
+		int start = data.find( "[ST] id = \"" );
+		if( start != std::string::npos) {
+			start += 11;
+			int end = data.find( '"', start+1 );
+			id = data.substr( start, end-start );
+		} else {
+				
+			EchoError( "ERROR@%s: %s", address.c_str(), "ServerTools is not installed." );
+			return;
+		}
+
+		parsed_groups.Reset();
+			
+		start = data.find( "[ST] groups = \"" );
+		if( start != std::string::npos ) {
+				
+			start += 15;
+			int end = data.find( '"', start+1 );
+			groups = data.substr( start, end-start );
+
+			parsed_groups.Parse( groups );
+		}
+
+
+		refresh_info = false;
+		// register server
+	}
+
 };
 
 std::vector<Server*> servers;
@@ -836,6 +853,13 @@ int RunCommandOnServers( std::string command, bool has_operation ) {
 	if( count == 0 ) { Echo( "No servers selected!" ); }
 	return count;
 }
+
+void RefreshServerGroups() {
+	for( size_t i = 0; i < servers.size(); i++ ) {
+		servers[i]->RefreshID();
+	}
+}
+
 /*
 int WaitForOperation() {
 	int count = 0;
@@ -1024,14 +1048,17 @@ void Command_List( CommandParams &params ) {
 	}
 }
 
+//-------------------------------------------------------------------------------------------------
 void Command_Echo( CommandParams &params ) {
 	EchoNotice( "%s", params.GetArgString().c_str() );
 }
 
+//-------------------------------------------------------------------------------------------------
 void Command_Fuck( CommandParams &params ) {
 	Echo( "%s", "My, what a filthy mind you have!" );
 }
 
+//-------------------------------------------------------------------------------------------------
 void Command_Help( CommandParams &params ) {
 	Echo( "Command Listing:" );
 	for( size_t i = 0; i < command_list.size(); i++ ) {
@@ -1040,6 +1067,19 @@ void Command_Help( CommandParams &params ) {
 		}
 	}
 }
+
+//-------------------------------------------------------------------------------------------------
+void Command_AddGroups( CommandParams &params ) {
+	RunCommandOnServers( "st_addgroups " + params.GetArgString(), false );
+	RefreshServerGroups();
+}
+
+//-------------------------------------------------------------------------------------------------
+void Command_RemoveGroups( CommandParams &params ) {
+	RunCommandOnServers( "st_removegroups " + params.GetArgString(), false );
+	RefreshServerGroups();
+}
+
 /*
 //-------------------------------------------------------------------------------------------------
 void Command_New( CommandParams &params ) {
@@ -1137,21 +1177,23 @@ void Command_Sync( CommandParams &params ) {
 	WaitForOperation();
 	
 }*/
+
+//-------------------------------------------------------------------------------------------------
 void Command_Get( CommandParams &params ) {
 	RunCommandOnServers( "st_get " + params.GetArgString(), true );
 }
 
+//-------------------------------------------------------------------------------------------------
 void Command_Remove( CommandParams &params ) {
 	RunCommandOnServers( "st_remove " + params.GetArgString(), true );
 	
 }
 
+//-------------------------------------------------------------------------------------------------
 void Command_Sync( CommandParams &params ) {
 	RunCommandOnServers( "st_sync " + params.GetArgString(), true );
 		
 }
-
-
 
 //-------------------------------------------------------------------------------------------------
 template <size_t maxlen> void GetInputEx( char (&dest)[maxlen], const char *prompt ) {
@@ -1225,9 +1267,11 @@ int _tmain( int argc, _TCHAR* argv[] ) {
 	//new ConsoleCommand( "view", Command_View, "View file contents" );
 	//new ConsoleCommand( "sync", Command_Sync, "Force sync" );
 
-	new ConsoleCommand( "sync", Command_Sync, "Perform ServerTools Sync" );
-	new ConsoleCommand( "get", Command_Get, "Perform ServerTools Get" );
-	new ConsoleCommand( "remove", Command_Remove, "Perform ServerTools Remove" );
+	new ConsoleCommand( "sync", Command_Sync, "Perform ServerTools Sync." );
+	new ConsoleCommand( "get", Command_Get, "Perform ServerTools Get." );
+	new ConsoleCommand( "remove", Command_Remove, "Perform ServerTools Remove." );
+	new ConsoleCommand( "addgroups", Command_AddGroups, "Add server groups." );
+	new ConsoleCommand( "removegroups", Command_RemoveGroups, "Remove server groups." );
 
 	new ConsoleCommand( "exec", Command_ExecuteScript, "Executes a script (for this console, not remotely)" );
 	new ConsoleCommand( "quit", Command_Quit, "" );
